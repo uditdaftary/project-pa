@@ -38,6 +38,14 @@ Project PA creates a personalized, physical-first interface between a user and t
 - **Framework:** LiveKit Agents 1.x (`AgentSession`) with real-time speech-to-speech models (`inference.RealtimeModel` / OpenAI Realtime / Gemini Live).
 - **Latency Budget:** Sub-320ms glass-to-agent conversational round-trip.
 
+### ADR-005: Dual-Platform Dev Gateway & Wearable Simulator
+- **Decision:** Build a full-stack local development and testing environment consisting of:
+  1. `agent-core/`: Python LiveKit Agents 1.x backend with speech-to-speech engine and dynamic routing tools.
+  2. `simulator/`: Interactive Web-based Wearable Simulator rendering the optical 640×200 green MicroLED HUD eyebox, simulating bone-conduction VPU / microphone audio input, and displaying private ear audio telemetry.
+  3. `ambient-screen/`: WebRTC Ambient Screen Receiver that renders full-screen interactive React/HTML artifacts, diagrams, and media when the agent triggers ambient casting.
+  4. `gateway/`: Local protocol bridge and media orchestrator managing WebRTC rooms, data channels, and asymmetric audio/display handoff.
+- **Rationale:** Enables instant, zero-hardware end-to-end verification of the physical interface, conversational latency, and cross-surface handoff.
+
 ---
 
 ## 3. Hardware Roadmap & Strategy

@@ -24,3 +24,4 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Changed
 - **Architectural Pivot (ADR-001)**: Per user directive, prioritized the **Software / Gateway / OS stack first** before hardware fabrication. Established hardware trajectory: **Developer Bench POC** first, followed by **Tier 3 Standalone Pocket Puck + Eyewear**.
+- **Development Environment Selected (ADR-005)**: Selected **Dual-Platform Dev Gateway & Wearable Simulator**: Python LiveKit Agents 1.x backend + Web-based Wearable Simulator (HUD eyebox, simulated bone-conduction VPU, dipole speaker) + WebRTC Ambient Screen Receiver.
