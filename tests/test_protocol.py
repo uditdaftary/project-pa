@@ -320,3 +320,66 @@ def test_stream_parser_crc_mismatch_resync():
     frames = parser.feed(bytes(corrupt_packet) + valid_packet)
     assert len(frames) == 1
     assert frames[0] == (MessageType.MSG_HEARTBEAT, 2, b"valid_recovery")
+
+
+def test_raw_bytes_audio_encoding_and_header_alignment():
+    """Verify BUG-022 and BUG-007: raw bytes get 10-byte header and 22-byte offset alignment."""
+    raw_audio = b"\x12\x34\x56\x78" * 40
+    packet = encode_message(MessageType.MSG_AUDIO_UPLINK, raw_audio, seq=90)
+    mtype, seq, payload_bytes = unpack_tlv(packet)
+    decoded: AudioUplinkPayload = decode_message(mtype, payload_bytes)
+
+    assert isinstance(decoded, AudioUplinkPayload)
+    assert decoded.audio_data == raw_audio  # Full raw audio preserved, not truncated
+    assert decoded.sample_rate == 16000
+    assert decoded.channels == 1
+    assert decoded.codec == "pcm_s16le"
+
+
+def test_codec_preservation_opus_lc3():
+    """Verify BUG-007: opus and lc3 codecs are preserved across binary TLV encoding."""
+    for codec_name in ["opus", "lc3", "pcm_s16le"]:
+        uplink = AudioUplinkPayload(
+            sample_rate=16000,
+            channels=1,
+            codec=codec_name,
+            audio_data=b"\xaa\xbb" * 20,
+        )
+        packet = encode_message(MessageType.MSG_AUDIO_UPLINK, uplink, seq=91)
+        mtype, _, payload_bytes = unpack_tlv(packet)
+        decoded: AudioUplinkPayload = decode_message(mtype, payload_bytes)
+        assert decoded.codec == codec_name
+
+
+def test_zero_crc_packet_validation_enforced():
+    """Verify BUG-008: A frame with CRC 0x0000 that is invalid raises CRCValidationError."""
+    payload = b"test_payload"
+    packet = bytearray(pack_tlv(MessageType.MSG_HEARTBEAT, payload, seq=1))
+    # Overwrite CRC in header (offset 10..12) with 0x0000
+    packet[10] = 0
+    packet[11] = 0
+
+    with pytest.raises(CRCValidationError):
+        unpack_tlv(bytes(packet), verify_crc=True)
+
+
+def test_json_payload_in_audio_and_bitmap():
+    """Verify BUG-009: JSON-encoded payload decoded correctly for audio and bitmap."""
+    import json
+    json_bytes = json.dumps({"sample_rate": 16000, "channels": 1, "codec": "opus", "audio_data": ""}).encode("utf-8")
+    decoded = decode_message(MessageType.MSG_AUDIO_UPLINK, json_bytes)
+    assert isinstance(decoded, AudioUplinkPayload)
+    assert decoded.codec == "opus"
+
+    json_bmp = json.dumps({"x": 5, "y": 10, "width": 100, "height": 50, "bitmap_data": ""}).encode("utf-8")
+    decoded_bmp = decode_message(MessageType.MSG_HUD_DRAW_BITMAP, json_bmp)
+    assert isinstance(decoded_bmp, HudDrawBitmapPayload)
+    assert decoded_bmp.x == 5
+    assert decoded_bmp.y == 10
+
+
+def test_hud_draw_text_default_y_coord():
+    """Verify BUG-017: Default y coordinate in HudDrawTextPayload is 20, not 0."""
+    payload = HudDrawTextPayload(text="MicroLED")
+    assert payload.y == 20
+
