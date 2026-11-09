@@ -46,6 +46,18 @@ Project PA creates a personalized, physical-first interface between a user and t
   4. `gateway/`: Local protocol bridge and media orchestrator managing WebRTC rooms, data channels, and asymmetric audio/display handoff.
 - **Rationale:** Enables instant, zero-hardware end-to-end verification of the physical interface, conversational latency, and cross-surface handoff.
 
+### ADR-006: Hybrid Agent Intelligence Engine (Local-First + Pluggable Cloud Bridge)
+- **Decision:** Adopt a hybrid multi-tier intelligence architecture:
+  1. **Local-First Baseline Engine ($0.00 operational cost)**: Derived directly from the proven stack in `C:\Projects\interactive-voice-agent`:
+     - `audio/`: Sub-0.05ms atomic ring buffer with 2ms half-cosine micro-fadeout (click-free barge-in).
+     - `vad/`: 80Hz IIR high-pass filter + DC blocker + dual-rate EMA adaptive noise floor estimator.
+     - `stt/`: Sherpa-ONNX / Moonshine Tiny running on CPU (~210ms latency, 0 MB VRAM).
+     - `llm/`: Local llama.cpp / Qwen 3.5 4B GGUF running in 2.7 GB VRAM (fits comfortably in 4 GB RTX 3050 Laptop GPU with 1.3 GB headroom).
+     - `tts/`: PocketTTS running on CPU (~140ms chunk synthesis, 0 MB VRAM).
+     - `parser/`: Sentence boundary tokenizer with Unicode `\uE000` sentinel shielding for streaming text cards to the 640×200 HUD.
+  2. **Pluggable Cloud Multimodal Bridge**: LiveKit Agents 1.x `AgentSession` connecting to Google Gemini Live / OpenAI Realtime for sub-250ms native speech-to-speech and egocentric visual perception when cloud connectivity is active.
+- **Rationale:** Guarantees 100% offline development, zero API cost during prototyping, and seamless escalation to cutting-edge multimodal vision models.
+
 ---
 
 ## 3. Hardware Roadmap & Strategy
