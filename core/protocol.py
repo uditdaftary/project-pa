@@ -43,6 +43,17 @@ HEADER_FORMAT = ">2sBBHIH"  # magic (2s), version (B), msg_type (B), seq (H), le
 HEADER_SIZE = struct.calcsize(HEADER_FORMAT)  # 12 bytes
 MAX_PAYLOAD_SIZE = 4 * 1024 * 1024  # 4 MB max payload safety limit
 
+# 10-byte 2-byte-aligned binary audio header: sample_rate (H), channels (B), codec_id (B), dest_or_vpu (B), reserved (B), float_param (f)
+AUDIO_HEADER_FORMAT = ">HBBBBf"
+AUDIO_HEADER_SIZE = struct.calcsize(AUDIO_HEADER_FORMAT)  # 10 bytes
+
+CODEC_TO_ID = {
+    "pcm_s16le": 0,
+    "opus": 1,
+    "lc3": 2,
+}
+ID_TO_CODEC = {v: k for k, v in CODEC_TO_ID.items()}
+
 
 def compute_crc16(data: bytes) -> int:
     """Computes CRC-16-CCITT (poly 0x1021, init 0xFFFF)."""
@@ -121,7 +132,7 @@ def unpack_tlv(data: bytes, verify_crc: bool = True) -> Tuple[int, int, bytes]:
 
     payload = data[HEADER_SIZE:total_len]
 
-    if verify_crc and crc != 0:
+    if verify_crc:
         crc_data = struct.pack(">BBHI", version, msg_type, seq, payload_len) + payload
         expected_crc = compute_crc16(crc_data)
         if crc != expected_crc:
@@ -173,7 +184,7 @@ class TLVStreamParser:
             del self.buffer[:total_len]
 
             payload = frame[HEADER_SIZE:]
-            if self.verify_crc and crc != 0:
+            if self.verify_crc:
                 crc_data = struct.pack(">BBHI", version, msg_type, seq, payload_len) + payload
                 expected_crc = compute_crc16(crc_data)
                 if crc != expected_crc:
@@ -221,17 +232,23 @@ def encode_message(
             pass
 
     if isinstance(payload, bytes):
-        payload_bytes = payload
+        if msg_type == MessageType.MSG_AUDIO_UPLINK:
+            header = struct.pack(AUDIO_HEADER_FORMAT, 16000, 1, 0, 0, 0, 0.0)
+            payload_bytes = header + payload
+        elif msg_type == MessageType.MSG_AUDIO_DOWNLINK:
+            header = struct.pack(AUDIO_HEADER_FORMAT, 24000, 1, 0, 0, 0, 0.0)
+            payload_bytes = header + payload
+        else:
+            payload_bytes = payload
     elif msg_type == MessageType.MSG_AUDIO_UPLINK and isinstance(payload, AudioUplinkPayload):
-        # Binary optimized packing:
-        # sample_rate (H: uint16), channels (B: uint8), is_vpu (B: uint8), vpu_energy (f: float32) -> 8 bytes
-        # followed by raw audio_data bytes
-        header = struct.pack(">HBBf", payload.sample_rate, payload.channels, 1 if payload.is_vpu else 0, payload.vpu_energy)
+        codec_id = CODEC_TO_ID.get(payload.codec, 0)
+        vpu_val = 1 if payload.is_vpu else 0
+        header = struct.pack(AUDIO_HEADER_FORMAT, payload.sample_rate, payload.channels, codec_id, vpu_val, 0, payload.vpu_energy)
         payload_bytes = header + payload.audio_data
     elif msg_type == MessageType.MSG_AUDIO_DOWNLINK and isinstance(payload, AudioDownlinkPayload):
-        # sample_rate (H: uint16), channels (B: uint8), destination (B: 0=private_ear, 1=ambient_room), attenuation (f: float32) -> 8 bytes
+        codec_id = CODEC_TO_ID.get(payload.codec, 0)
         dest_val = 1 if payload.destination == AudioDestination.AMBIENT_ROOM else 0
-        header = struct.pack(">HBBf", payload.sample_rate, payload.channels, dest_val, payload.attenuation_db)
+        header = struct.pack(AUDIO_HEADER_FORMAT, payload.sample_rate, payload.channels, codec_id, dest_val, 0, payload.attenuation_db)
         payload_bytes = header + payload.audio_data
     elif msg_type == MessageType.MSG_HUD_DRAW_BITMAP and isinstance(payload, HudDrawBitmapPayload):
         # x (H), y (H), width (H), height (H) -> 8 bytes
@@ -255,19 +272,62 @@ def decode_message(msg_type: int, payload_bytes: bytes) -> Any:
     except ValueError:
         return payload_bytes
 
+    # Check for JSON serialized payloads first if payload begins with b"{" (BUG-009)
+    if payload_bytes.startswith(b"{"):
+        try:
+            data = json.loads(payload_bytes.decode("utf-8"))
+            if mtype == MessageType.MSG_AUDIO_UPLINK:
+                return AudioUplinkPayload(**data)
+            elif mtype == MessageType.MSG_AUDIO_DOWNLINK:
+                return AudioDownlinkPayload(**data)
+            elif mtype == MessageType.MSG_HUD_DRAW_BITMAP:
+                return HudDrawBitmapPayload(**data)
+            elif mtype == MessageType.MSG_HUD_DRAW_TEXT:
+                return HudDrawTextPayload(**data)
+            elif mtype == MessageType.MSG_IMU_TELEMETRY:
+                return ImuTelemetryPayload(**data)
+            elif mtype == MessageType.MSG_VPU_VAD_EVENT:
+                return VpuVadEventPayload(**data)
+            elif mtype == MessageType.MSG_SYSTEM_CONTROL:
+                return SystemControlPayload(**data)
+            elif mtype == MessageType.MSG_CROSS_SURFACE_ROUTING:
+                return CrossSurfaceRoutingPayload(**data)
+            elif mtype == MessageType.MSG_AMBIENT_DISPLAY_CONTENT:
+                return AmbientDisplayPayload(**data)
+            elif mtype == MessageType.MSG_HEARTBEAT:
+                return HeartbeatPayload(**data)
+            return data
+        except Exception:
+            pass
+
     if mtype == MessageType.MSG_AUDIO_UPLINK:
-        if len(payload_bytes) >= 8:
+        if len(payload_bytes) >= AUDIO_HEADER_SIZE:
+            sample_rate, channels, codec_id, is_vpu_raw, reserved, vpu_energy = struct.unpack(
+                AUDIO_HEADER_FORMAT, payload_bytes[:AUDIO_HEADER_SIZE]
+            )
+            audio_data = payload_bytes[AUDIO_HEADER_SIZE:]
+            codec = ID_TO_CODEC.get(codec_id, "pcm_s16le")
+            return AudioUplinkPayload(
+                sample_rate=sample_rate,
+                channels=channels,
+                codec=codec,
+                is_vpu=bool(is_vpu_raw),
+                vpu_energy=vpu_energy,
+                audio_data=audio_data
+            )
+        elif len(payload_bytes) >= 8:
+            # Fallback for legacy 8-byte header
             sample_rate, channels, is_vpu_raw, vpu_energy = struct.unpack(">HBBf", payload_bytes[:8])
             audio_data = payload_bytes[8:]
             return AudioUplinkPayload(
                 sample_rate=sample_rate,
                 channels=channels,
+                codec="pcm_s16le",
                 is_vpu=bool(is_vpu_raw),
                 vpu_energy=vpu_energy,
                 audio_data=audio_data
             )
         else:
-            # Fallback for JSON or raw
             try:
                 data = json.loads(payload_bytes.decode("utf-8"))
                 return AudioUplinkPayload(**data)
@@ -275,13 +335,30 @@ def decode_message(msg_type: int, payload_bytes: bytes) -> Any:
                 return AudioUplinkPayload(audio_data=payload_bytes)
 
     elif mtype == MessageType.MSG_AUDIO_DOWNLINK:
-        if len(payload_bytes) >= 8:
+        if len(payload_bytes) >= AUDIO_HEADER_SIZE:
+            sample_rate, channels, codec_id, dest_val, reserved, attenuation = struct.unpack(
+                AUDIO_HEADER_FORMAT, payload_bytes[:AUDIO_HEADER_SIZE]
+            )
+            destination = AudioDestination.AMBIENT_ROOM if dest_val == 1 else AudioDestination.PRIVATE_EAR
+            codec = ID_TO_CODEC.get(codec_id, "pcm_s16le")
+            audio_data = payload_bytes[AUDIO_HEADER_SIZE:]
+            return AudioDownlinkPayload(
+                sample_rate=sample_rate,
+                channels=channels,
+                codec=codec,
+                destination=destination,
+                attenuation_db=attenuation,
+                audio_data=audio_data
+            )
+        elif len(payload_bytes) >= 8:
+            # Fallback for legacy 8-byte header
             sample_rate, channels, dest_val, attenuation = struct.unpack(">HBBf", payload_bytes[:8])
             destination = AudioDestination.AMBIENT_ROOM if dest_val == 1 else AudioDestination.PRIVATE_EAR
             audio_data = payload_bytes[8:]
             return AudioDownlinkPayload(
                 sample_rate=sample_rate,
                 channels=channels,
+                codec="pcm_s16le",
                 destination=destination,
                 attenuation_db=attenuation,
                 audio_data=audio_data
@@ -299,8 +376,11 @@ def decode_message(msg_type: int, payload_bytes: bytes) -> Any:
             bitmap_data = payload_bytes[8:]
             return HudDrawBitmapPayload(x=x, y=y, width=width, height=height, bitmap_data=bitmap_data)
         else:
-            data = json.loads(payload_bytes.decode("utf-8"))
-            return HudDrawBitmapPayload(**data)
+            try:
+                data = json.loads(payload_bytes.decode("utf-8"))
+                return HudDrawBitmapPayload(**data)
+            except Exception:
+                return HudDrawBitmapPayload(bitmap_data=payload_bytes)
 
     # JSON-decoded payloads
     text = payload_bytes.decode("utf-8")

@@ -78,7 +78,7 @@ class AudioDownlinkPayload(BaseModel):
 class HudDrawTextPayload(BaseModel):
     """Payload for MSG_HUD_DRAW_TEXT."""
     x: int = Field(default=0, ge=0, le=640)
-    y: int = Field(default=0, ge=0, le=200)
+    y: int = Field(default=20, ge=0, le=200)
     text: str = ""
     font_size: int = 14
     clear_screen: bool = False
