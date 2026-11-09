@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Project PA // Ambient Screen Cast Target</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="background-canvas"></div>
+
+  <header>
+    <div class="brand">
+      <h1>PROJECT PA // AMBIENT CAST TARGET</h1>
+      <span class="cast-pill standby" id="statusPill">STANDBY</span>
+    </div>
+    <div style="font-size: 12px; color: var(--text-muted);">
+      TARGET ANCHOR: <span style="color: var(--accent-cyan); font-family: monospace;">[0.0, 0.0, 1.0]</span>
+    </div>
+  </header>
+
+  <div class="screen-container">
+    <!-- Standby Gaze Target View -->
+    <div class="standby-view" id="standbyView">
+      <div class="gaze-target-reticle" id="reticle">
+        <div class="gaze-target-dot"></div>
+      </div>
+      <h2 class="standby-title">Ambient Screen Ready</h2>
+      <p class="standby-subtitle">
+        Look directly at this display through your eyewear or prompt your agent to cast high-density information.
+      </p>
+    </div>
+
+    <!-- Active Cast View -->
+    <div class="active-cast-view hidden" id="activeCastView">
+      <div class="content-card">
+        <div class="content-header">
+          <span id="contentTitle">Agent Output</span>
+          <span style="font-size: 11px; color: var(--text-muted); font-weight: normal;">CAST PROTOCOL ACTIVE</span>
+        </div>
+        <div class="markdown-body" id="contentBody">
+          <!-- Dynamic Markdown / Table Content -->
+        </div>
+      </div>
+
+      <!-- Ambient Room Audio Spectrum -->
+      <div class="audio-spectrum-card" id="roomAudioCard">
+        <div style="font-size: 12px; min-width: 160px;">
+          <div style="color: var(--accent-cyan); font-weight: 600;">Ambient Room Audio</div>
+          <div style="font-size: 11px; color: var(--text-muted);">Bluetooth / Auracast</div>
+        </div>
+        <canvas id="spectrumCanvas" width="400" height="48"></canvas>
+      </div>
+
+      <div class="telemetry-footer">
+        <span>TRANSMISSION: WEBSOCKET / TLV BINARY</span>
+        <span id="latencyMetric">ROUND-TRIP LATENCY: 220ms</span>
+      </div>
+    </div>
+  </div>
+
+  <script src="ambient.js"></script>
+</body>
+</html>

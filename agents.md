@@ -32,7 +32,7 @@ The parent agent operates as the **Sole Orchestrator**, serving as the single po
 | **`DeepInvestigator`** (`eba88b35`) | Deep research into optics, audio, silicon, and open-source stacks. | `inherit` | **Completed** | Master Investigation Blueprint (4-subagent synthesis) |
 | ↳ `DeepInvestigatorWorkerL0` (`2800235d`) | Initial exploration of hardware landscape, protocols, and BOM. | `inherit` | **Completed** | Initial Technical Report |
 | ↳ `DeepInvestigatorImprovementWorker` (`98ea7f75`) | Technical audit, error correction (Tarvos piezo amp, LiveKit 1.x, Omi Opus-GATT). | `inherit` | **Completed** | Audited Evidence Dossier |
-| **`DeepCoder`** (Active) | Implement core TLV protocol, gateway server, hybrid agent engine, wearable simulator, and ambient screen receiver. | `inherit` | **Active** | `core/`, `agent_engine/`, `gateway/`, `simulator/`, `ambient_screen/`, `tests/` |
+| **`DeepCoder`** (`1802412f`) | Implement core TLV protocol, gateway server, hybrid agent engine, wearable simulator, and ambient screen receiver across 4 parallel streams. | `inherit` | **Completed** | `core/`, `agent_engine/`, `gateway/`, `simulator/`, `ambient_screen/`, `tests/` (43 passing tests) |
 
 ---
 

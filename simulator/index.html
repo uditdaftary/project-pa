@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Project PA - Wearable Eyewear Simulator</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header>
+    <h1>Project PA // Wearable Eyewear Simulator</h1>
+    <div class="status-badge">
+      <div class="status-dot" id="connDot"></div>
+      <span id="connText">DISCONNECTED</span>
+    </div>
+  </header>
+
+  <div class="container">
+    <!-- Left Column: 640x200 Monochrome Green Eyebox -->
+    <div class="eyebox-section">
+      <div class="section-title">
+        <span>Optical Eyebox (JBD 0.13" 640×200 Monochrome Green MicroLED)</span>
+        <span id="fpsCounter">60 FPS</span>
+      </div>
+
+      <div class="eyebox-frame">
+        <canvas id="hudCanvas" width="640" height="200"></canvas>
+        <div class="scanlines-overlay"></div>
+        <div class="waveguide-overlay">
+          <div class="waveguide-reticle"></div>
+        </div>
+      </div>
+
+      <div class="hud-telemetry-bar">
+        <div class="telemetry-item">BATTERY: <span id="battVal">94%</span></div>
+        <div class="telemetry-item">BRIGHTNESS: <span id="brightVal">1200 NITS</span></div>
+        <div class="telemetry-item">DISPLAY ROUTE: <span id="dispRouteVal">PRIVATE_HUD</span></div>
+        <div class="telemetry-item">AUDIO ROUTE: <span id="audioRouteVal">PRIVATE_EAR</span></div>
+      </div>
+
+      <!-- Private Ear USound Ganymede Telemetry -->
+      <div class="panel-card">
+        <h3>Private Ear Audio (USound Ganymede MEMS Dipole)</h3>
+        <p style="font-size: 11px; color: var(--text-dim); margin-bottom: 6px;">
+          USound Tarvos 1.2 Class-H 30Vpp Boost Amp with 22 dB Dipole Acoustic Cancellation.
+        </p>
+        <div class="audio-meter">
+          <div class="audio-bar" id="earAudioBar"></div>
+        </div>
+        <div style="display: flex; justify-content: space-between; font-size: 10px; margin-top: 4px; color: var(--text-dim);">
+          <span id="earAudioDb">-inf dBFS</span>
+          <span id="earAcousticLeakage">Leakage: &lt; 38 dBA @ 1m (Inaudible)</span>
+        </div>
+      </div>
+
+      <!-- Real-time Packet Log -->
+      <div class="panel-card">
+        <h3>Wearable TLV Stream Log</h3>
+        <div class="log-box" id="logBox"></div>
+      </div>
+    </div>
+
+    <!-- Right Column: Interactive Physical Controls -->
+    <div class="controls-column">
+      <!-- Bone-Conduction VPU Whisper Panel -->
+      <div class="panel-card">
+        <h3>ST LIS25BA Bone-Conduction VPU</h3>
+        <p style="font-size: 11px; color: var(--text-dim); margin-bottom: 8px;">
+          Vocal cord skull resonance sensor. Triggers agent speech recognition even in 90dB ambient noise.
+        </p>
+        <div class="btn-group">
+          <button id="micToggleBtn">Enable Mic Input</button>
+        </div>
+        <button class="whisper-btn" id="whisperBtn">HOLD TO WHISPER (VPU TRIGGER)</button>
+        <div class="audio-meter" style="margin-top: 8px;">
+          <div class="audio-bar" id="micAudioBar" style="background: var(--accent-cyan);"></div>
+        </div>
+      </div>
+
+      <!-- 6-DoF IMU & Gaze Targeting -->
+      <div class="panel-card">
+        <h3>6-DoF IMU & Look-to-Cast Gaze Targeting</h3>
+        <p style="font-size: 11px; color: var(--text-dim); margin-bottom: 10px;">
+          Align gaze vector with ambient screen to dynamically transfer visual UI.
+        </p>
+
+        <div class="slider-group">
+          <div class="slider-row">
+            <label>PITCH</label>
+            <input type="range" id="pitchSlider" min="-90" max="90" value="0">
+            <span id="pitchVal">0°</span>
+          </div>
+          <div class="slider-row">
+            <label>YAW</label>
+            <input type="range" id="yawSlider" min="-180" max="180" value="0">
+            <span id="yawVal">0°</span>
+          </div>
+          <div class="slider-row">
+            <label>ROLL</label>
+            <input type="range" id="rollSlider" min="-90" max="90" value="0">
+            <span id="rollVal">0°</span>
+          </div>
+        </div>
+
+        <div class="btn-group">
+          <button id="lookCastBtn" style="border-color: var(--accent-orange); color: var(--accent-orange);">LOOK TO CAST SCREEN</button>
+          <button id="glanceAwayBtn">GLANCE AWAY (HUD)</button>
+          <button id="nodBtn">NOD GESTURE</button>
+          <button id="shakeBtn">SHAKE GESTURE</button>
+          <button id="clearHudBtn">CLEAR HUD</button>
+        </div>
+      </div>
+
+      <!-- Quick Speech Test Injection -->
+      <div class="panel-card">
+        <h3>Simulated Voice Commands</h3>
+        <div class="btn-group">
+          <button id="testPromptBtn1">"Show metrics on screen"</button>
+          <button id="testPromptBtn2">"Switch back to HUD"</button>
+          <button id="testPromptBtn3">"Route audio to room"</button>
+          <button id="testPromptBtn4">"What is the system status?"</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="simulator.js"></script>
+</body>
+</html>
