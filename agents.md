@@ -32,8 +32,26 @@ The parent agent operates as the **Sole Orchestrator**, serving as the single po
 | **`DeepInvestigator`** (`eba88b35`) | Deep research into optics, audio, silicon, and open-source stacks. | `inherit` | **Completed** | Master Investigation Blueprint (4-subagent synthesis) |
 | ↳ `DeepInvestigatorWorkerL0` (`2800235d`) | Initial exploration of hardware landscape, protocols, and BOM. | `inherit` | **Completed** | Initial Technical Report |
 | ↳ `DeepInvestigatorImprovementWorker` (`98ea7f75`) | Technical audit, error correction (Tarvos piezo amp, LiveKit 1.x, Omi Opus-GATT). | `inherit` | **Completed** | Audited Evidence Dossier |
-| **`SoftwareGatewayArchitect`** (Upcoming) | Design and implementation of the mobile host gateway, BLE audio multiplexer, and cross-surface display router. | `inherit` | **Planned** | `mobile-host/` codebase & LiveKit agent runtime |
-| **`WearableOSDeveloper`** (Upcoming) | Lightweight wearable OS/firmware for Bench POC (Opus-over-GATT, text HUD buffer, IMU fusion). | `inherit` | **Planned** | `firmware/` codebase & simulator |
+| **`DeepCoder`** (Active) | Implement core TLV protocol, gateway server, hybrid agent engine, wearable simulator, and ambient screen receiver. | `inherit` | **Active** | `core/`, `agent_engine/`, `gateway/`, `simulator/`, `ambient_screen/`, `tests/` |
+
+---
+
+## 3. Post-Sprint Quality & Competitive Resolution Registry (ADR-009)
+
+When the development sprint finishes, the following multi-agent review pipeline executes:
+
+1. **Review Scrutiny Team (4 Agents)**:
+   - `Reviewer-Correctness`: Correctness, edge cases, protocol framing integrity.
+   - `Reviewer-Security-Thermals`: Concurrency, input sanitization, thermal/power invariants.
+   - `Reviewer-Architecture`: 5-axis code quality, dependency discipline, module coupling.
+   - `Reviewer-BugHunter`: Adversarial bug hunting across all 14 bug taxonomies -> `bugs.md`.
+2. **Competitive Resolution Teams (2 Teams of 2 Agents)**:
+   - **Team Alpha** (`AlphaLead`, `AlphaArchitect`): Debates issues and formulates Unified Approach Alpha.
+   - **Team Beta** (`BetaLead`, `BetaArchitect`): Debates issues and formulates Unified Approach Beta.
+3. **Orchestrator Selection**: Evaluates Alpha vs. Beta proposals and synthesizes the Master Fix Plan.
+4. **Fix Execution Team (4 Agents)**:
+   - `FixAgent-Protocol`, `FixAgent-Audio`, `FixAgent-Gateway`, `FixAgent-UI`: Deploy fixes and verify tests.
+5. **GitHub Integration**: Posts issues and PR review comments via GitHub CLI (`gh`).
 
 ---
 
