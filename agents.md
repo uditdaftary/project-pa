@@ -33,6 +33,10 @@ The parent agent operates as the **Sole Orchestrator**, serving as the single po
 | ↳ `DeepInvestigatorWorkerL0` (`2800235d`) | Initial exploration of hardware landscape, protocols, and BOM. | `inherit` | **Completed** | Initial Technical Report |
 | ↳ `DeepInvestigatorImprovementWorker` (`98ea7f75`) | Technical audit, error correction (Tarvos piezo amp, LiveKit 1.x, Omi Opus-GATT). | `inherit` | **Completed** | Audited Evidence Dossier |
 | **`DeepCoder`** (`1802412f`) | Implement core TLV protocol, gateway server, hybrid agent engine, wearable simulator, and ambient screen receiver across 4 parallel streams. | `inherit` | **Completed** | `core/`, `agent_engine/`, `gateway/`, `simulator/`, `ambient_screen/`, `tests/` (43 passing tests) |
+| **`ScrutinyTeam`** (`8d2edda5`) | Adversarial code review across correctness, security, architecture, and bug taxonomies. | `inherit` | **Completed** | Itemized audit dossier (`bugs.md` with 27 bugs) |
+| **`TeamAlpha`** (`b567f431`) | Competitive resolution: Architectural lead & peer debate. | `inherit` | **Completed** | Unified Proposal Alpha |
+| **`TeamBeta`** (`4a3cf0e7`) | Competitive resolution: Low-level systems lead & peer debate. | `inherit` | **Completed** | Unified Proposal Beta |
+| **`FixTeam`** (`71c2adef` / `e13df045`) | Implement 27 bug fixes across 4 streams, harden against adversarial edge cases, sync GitHub issues and PRs. | `inherit` | **Completed** | 72 passing tests, 27 closed GitHub issues, 4 merged PRs |
 
 ---
 
