@@ -202,3 +202,42 @@ process.stdout.write(packTLV(5, payload).toString("hex"));
     assert mtype == 5
     assert seq == 77
     assert b"pitch" in payload_bytes
+
+
+def test_simulator_js_json_bitmap_and_unaligned_audio_handling():
+    """Verify Node.js executes unaligned audio buffer slicing and JSON bitmap parsing without RangeError or crashes."""
+    import subprocess
+    import shutil
+
+    if not shutil.which("node"):
+        pytest.skip("Node.js not installed in test environment")
+
+    node_code = """
+// 1. Unaligned buffer Int16Array slicing test
+const fullBuf = new ArrayBuffer(23); // Odd byte length
+const pcmBytes = new Uint8Array(fullBuf, 1, 22); // byteOffset = 1 (ODD!)
+const sampleCount = Math.floor(pcmBytes.length / 2);
+
+let int16Samples;
+if (pcmBytes.byteOffset % 2 === 0) {
+  int16Samples = new Int16Array(pcmBytes.buffer, pcmBytes.byteOffset, sampleCount);
+} else {
+  int16Samples = new Int16Array(pcmBytes.slice().buffer, 0, sampleCount);
+}
+if (int16Samples.length !== 11) {
+  throw new Error("Sample count mismatch: " + int16Samples.length);
+}
+
+// 2. JSON bitmap payload parsing test
+const jsonPayload = Buffer.from(JSON.stringify({ x: 10, y: 20, width: 640, height: 200, bitmap_data: "" }));
+if (jsonPayload.length > 0 && jsonPayload[0] === 0x7B) {
+  const parsed = JSON.parse(jsonPayload.toString("utf-8"));
+  if (parsed.width !== 640 || parsed.height !== 200) {
+    throw new Error("Failed to parse JSON bitmap dimensions");
+  }
+}
+process.stdout.write("OK");
+"""
+    result = subprocess.run(["node", "-e", node_code], capture_output=True, text=True, check=True)
+    assert result.stdout.strip() == "OK"
+

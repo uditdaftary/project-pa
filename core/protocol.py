@@ -231,15 +231,16 @@ def encode_message(
         except (ValueError, TypeError):
             pass
 
-    if isinstance(payload, bytes):
+    if isinstance(payload, (bytes, bytearray, memoryview)):
+        raw_data = bytes(payload)
         if msg_type == MessageType.MSG_AUDIO_UPLINK:
             header = struct.pack(AUDIO_HEADER_FORMAT, 16000, 1, 0, 0, 0, 0.0)
-            payload_bytes = header + payload
+            payload_bytes = header + raw_data
         elif msg_type == MessageType.MSG_AUDIO_DOWNLINK:
             header = struct.pack(AUDIO_HEADER_FORMAT, 24000, 1, 0, 0, 0, 0.0)
-            payload_bytes = header + payload
+            payload_bytes = header + raw_data
         else:
-            payload_bytes = payload
+            payload_bytes = raw_data
     elif msg_type == MessageType.MSG_AUDIO_UPLINK and isinstance(payload, AudioUplinkPayload):
         codec_id = CODEC_TO_ID.get(payload.codec, 0)
         vpu_val = 1 if payload.is_vpu else 0
@@ -273,7 +274,7 @@ def decode_message(msg_type: int, payload_bytes: bytes) -> Any:
         return payload_bytes
 
     # Check for JSON serialized payloads first if payload begins with b"{" (BUG-009)
-    if payload_bytes.startswith(b"{"):
+    if payload_bytes.lstrip().startswith(b"{"):
         try:
             data = json.loads(payload_bytes.decode("utf-8"))
             if mtype == MessageType.MSG_AUDIO_UPLINK:

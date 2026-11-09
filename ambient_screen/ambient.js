@@ -209,6 +209,20 @@ function handleIncomingPacket(buffer) {
       playRoomAudio(payloadBytes);
       break;
     }
+    case MSG_HEARTBEAT: {
+      try {
+        const jsonStr = new TextDecoder().decode(payloadBytes);
+        const hb = JSON.parse(jsonStr);
+        if (hb.echo && hb.timestamp_ms) {
+          const rtt = Math.max(0, Date.now() - hb.timestamp_ms);
+          const latencyEl = document.getElementById("latencyMetric");
+          if (latencyEl) {
+            latencyEl.innerText = `ROUND-TRIP LATENCY: ${rtt}ms`;
+          }
+        }
+      } catch (e) {}
+      break;
+    }
   }
 }
 
@@ -224,6 +238,9 @@ function applyRouting(routing) {
     statusPill.innerText = "STANDBY";
     standbyView.classList.remove("hidden");
     activeCastView.classList.add("hidden");
+    if (audioCtx) {
+      nextStartTime = audioCtx.currentTime;
+    }
   }
 }
 
@@ -258,6 +275,7 @@ function renderAmbientContent(data) {
 }
 
 function playRoomAudio(payloadBytes) {
+  if (payloadBytes.length > 0 && payloadBytes[0] === 0x7B) return;
   if (payloadBytes.length < 8) return;
   // Binary audio header: >HBBBBf (10 bytes) or legacy >HBBf (8 bytes)
   const is10Byte = payloadBytes.length >= 10;
@@ -271,7 +289,13 @@ function playRoomAudio(payloadBytes) {
   const pcmBytes = payloadBytes.subarray(headerLen);
   const sampleCount = Math.floor(pcmBytes.length / 2);
   if (sampleCount <= 0) return;
-  const int16Samples = new Int16Array(pcmBytes.buffer, pcmBytes.byteOffset, sampleCount);
+
+  let int16Samples;
+  if (pcmBytes.byteOffset % 2 === 0) {
+    int16Samples = new Int16Array(pcmBytes.buffer, pcmBytes.byteOffset, sampleCount);
+  } else {
+    int16Samples = new Int16Array(pcmBytes.slice().buffer, 0, sampleCount);
+  }
 
   // Spectrum animation
   drawSpectrum(int16Samples);

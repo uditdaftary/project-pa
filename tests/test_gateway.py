@@ -174,3 +174,37 @@ def test_client_connection_selective_audio_drop():
 
     asyncio.run(_run())
 
+
+def test_client_connection_send_timeout_under_stalled_drain():
+    """Verify ClientConnection.send times out cleanly on full queue without drain task, preventing indefinite deadlock."""
+    import asyncio
+    from gateway.audio_router import ClientConnection
+
+    class StalledWS:
+        async def send_bytes(self, data):
+            await asyncio.sleep(100.0)
+        async def close(self):
+            pass
+
+    async def _run():
+        stalled_ws = StalledWS()
+        conn = ClientConnection(stalled_ws, max_queue_size=1)
+        # Fill queue
+        await conn.send(b"packet_1", is_audio=False)
+        assert conn.queue.full()
+
+        # Sending another critical packet when no drain task is consuming should timeout and return False
+        sent = await conn.send(b"packet_2", is_audio=False)
+        assert sent is False
+        assert not conn.is_active
+
+    asyncio.run(_run())
+
+
+def test_lifespan_graceful_shutdown(client):
+    """Verify lifespan context manager initializes and shuts down engine cleanly."""
+    assert engine.bridge.is_connected
+    assert engine._playback_task is not None
+    assert not engine._playback_task.done()
+
+

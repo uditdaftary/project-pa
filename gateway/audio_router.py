@@ -69,15 +69,23 @@ class ClientConnection:
     async def send(self, data: bytes, is_audio: bool = False) -> bool:
         if not self.is_active:
             return False
+        if self.drain_task and self.drain_task.done():
+            self.is_active = False
+            return False
         if self.queue.full():
             if is_audio:
                 # Selectively drop audio frames under backpressure (BUG-013)
                 logger.debug("Dropping audio frame due to queue backpressure")
                 return False
             else:
-                # Critical packet (UI text, bitmaps, routing): await space to prevent loss
-                await self.queue.put(data)
-                return True
+                # Critical packet (UI text, bitmaps, routing): await space with timeout to prevent deadlock
+                try:
+                    await asyncio.wait_for(self.queue.put(data), timeout=1.0)
+                    return True
+                except (asyncio.TimeoutError, Exception) as e:
+                    logger.warning(f"Dropping packet due to persistent queue backpressure or stalled client: {e}")
+                    self.is_active = False
+                    return False
         else:
             self.queue.put_nowait(data)
             return True

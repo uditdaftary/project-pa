@@ -125,7 +125,6 @@ class HybridAgentEngine:
                     clear_screen=False,
                     teleprompter_mode=True
                 ))
-            self._safe_dispatch(self.on_hud_text, HudDrawTextPayload(text="", clear_screen=True))
             return
 
         # Check content routing (BUG-003: current_display == CAST_AMBIENT or recommended == CAST_AMBIENT)
@@ -153,11 +152,11 @@ class HybridAgentEngine:
         downlink.destination = self.router.current_audio
 
         # Write to ring buffer for tracking/playback
-        self.ring_buffer.write(downlink.audio_data)
+        written = self.ring_buffer.write(downlink.audio_data)
 
         # Enable Acoustic Echo Suppression (AES) during agent audio playback (BUG-006)
-        ref_samples = np.frombuffer(downlink.audio_data, dtype=np.int16)
-        self.vad.set_playback_active(True, reference_signal=ref_samples)
+        if written > 0:
+            self.vad.set_playback_active(True, reference_signal=downlink.audio_data)
 
         self._safe_dispatch(self.on_audio_downlink, downlink)
 
@@ -188,8 +187,8 @@ class HybridAgentEngine:
                 await asyncio.sleep(0.020)
                 if self.ring_buffer.is_actively_playing():
                     self.ring_buffer.read(samples_per_tick)
-                    if not self.ring_buffer.is_actively_playing():
-                        self.vad.set_playback_active(False)
+                if not self.ring_buffer.is_actively_playing() and getattr(self.vad, "_is_playback_active", False):
+                    self.vad.set_playback_active(False)
         except asyncio.CancelledError:
             pass
 

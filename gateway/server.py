@@ -44,9 +44,12 @@ audio_router = GatewayAudioRouter(engine)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Lifecycle manager for background engine initialization."""
+    """Lifecycle manager for background engine initialization and graceful teardown."""
     await engine.initialize()
-    yield
+    try:
+        yield
+    finally:
+        await engine.shutdown()
 
 
 app = FastAPI(

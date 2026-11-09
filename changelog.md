@@ -77,4 +77,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
     - **BUG-024 (Client Keepalive Heartbeat Interval)**: Added 15-second keepalive `MSG_HEARTBEAT` timer in both `simulator.js` and `ambient.js`.
     - **BUG-026 (Ambient Multi-Card Dashboard Tile Rendering)**: Added `#cardsGrid` dashboard container and rendered structured card tiles in `ambient.js` with responsive styling in `styles.css`.
   - **Test Suite Expansion**: Added 12 new comprehensive tests covering floating DAC scaling, fixed VAD threshold clamping, gaze vs explicit cast preservation, streaming accumulator turn flushing, raw byte 10-byte header packing, codec preservation, zero CRC packet enforcement, JSON struct collision prevention, and HUD text coordinate defaults (64 total passing tests).
+- **Adversarial Audit & Robustness Hardening (Expanded to 72 Passing Tests)**:
+  - **Protocol & Framing Hardening (`core/protocol.py`)**:
+    - Extended `encode_message()` to transparently accept `bytearray` and `memoryview` without triggering JSON serialization `TypeError`.
+    - Added whitespace tolerance (`payload_bytes.lstrip().startswith(b"{")`) to prevent JSON payloads with leading spaces/newlines from triggering binary struct unpack collisions.
+  - **Audio Pipeline & VAD Safety (`agent_engine/engine.py`, `agent_engine/local/vad.py`)**:
+    - Fixed `_handle_bridge_audio()` to safely pass raw downlink bytes directly to VAD without calling unpadded `np.frombuffer`, preventing fatal `ValueError` crashes on odd-length or compressed frames.
+    - Decoupled `_playback_clock_task()` VAD deactivation check so that when the ring buffer is drained externally (or via barge-in), Acoustic Echo Suppression state is cleanly reset to `False`.
+    - Removed premature `HudDrawTextPayload(text="", clear_screen=True)` dispatch on turn completion, ensuring the user can read the final response on the HUD until the next prompt.
+  - **Gateway Concurrency & Lifecycle Protection (`gateway/audio_router.py`, `gateway/server.py`)**:
+    - Added drain task liveness checks and an explicit 1.0s timeout to `ClientConnection.send()`, preventing broadcast loop deadlocks if a client stalls under heavy backpressure.
+    - Added `try ... finally: await engine.shutdown()` to FastAPI `lifespan` manager, ensuring background tasks and bridge connections terminate cleanly on server shutdown.
+  - **Wearable Simulator & Ambient Screen Hardening (`simulator/simulator.js`, `ambient_screen/ambient.js`)**:
+    - Protected `Int16Array` construction in both `simulator.js` and `ambient.js` against odd byte offsets via sliced aligned buffer fallbacks, eliminating Web Audio `RangeError`.
+    - Added JSON payload detection for `MSG_HUD_DRAW_BITMAP` in `simulator.js`, preventing struct unpack collisions on JSON bitmap commands.
+    - Added `MSG_HEARTBEAT` echo pong handler in `ambient.js`, dynamically computing round-trip latency and updating `#latencyMetric`.
+    - Reset Web Audio timeline cursor `nextStartTime` upon switching to standby in `ambient.js` to eliminate packet jitter drift.
+  - **Test Suite Expansion**: Added 8 new automated unit and integration tests covering bytearray/memoryview encoding, whitespace JSON decoding, odd-length downlink audio, autonomous playback clock VAD reset, external drain reset, ClientConnection backpressure timeouts, and lifespan teardown (72 passing tests in 2.40s).
+
 

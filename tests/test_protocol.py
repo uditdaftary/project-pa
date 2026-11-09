@@ -383,3 +383,30 @@ def test_hud_draw_text_default_y_coord():
     payload = HudDrawTextPayload(text="MicroLED")
     assert payload.y == 20
 
+
+def test_encode_message_bytearray_and_memoryview():
+    """Verify encode_message handles bytearray and memoryview payloads without raising TypeError."""
+    raw = bytearray(b"\x11\x22\x33\x44" * 10)
+    packet_ba = encode_message(MessageType.MSG_AUDIO_UPLINK, raw, seq=101)
+    mtype, seq, payload_bytes = unpack_tlv(packet_ba)
+    decoded = decode_message(mtype, payload_bytes)
+    assert isinstance(decoded, AudioUplinkPayload)
+    assert decoded.audio_data == bytes(raw)
+
+    mv = memoryview(b"\xaa\xbb\xcc\xdd" * 8)
+    packet_mv = encode_message(MessageType.MSG_AUDIO_DOWNLINK, mv, seq=102)
+    mtype2, seq2, payload_bytes2 = unpack_tlv(packet_mv)
+    decoded2 = decode_message(mtype2, payload_bytes2)
+    assert isinstance(decoded2, AudioDownlinkPayload)
+    assert decoded2.audio_data == bytes(mv)
+
+
+def test_decode_message_json_with_leading_whitespace():
+    """Verify JSON payloads formatted with leading whitespace/newlines decode as JSON rather than struct unpacking garbage."""
+    whitespace_json = b"  \n\t {\"sample_rate\": 16000, \"channels\": 1, \"codec\": \"opus\", \"audio_data\": \"\"}"
+    decoded = decode_message(MessageType.MSG_AUDIO_UPLINK, whitespace_json)
+    assert isinstance(decoded, AudioUplinkPayload)
+    assert decoded.sample_rate == 16000
+    assert decoded.codec == "opus"
+
+

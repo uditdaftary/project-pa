@@ -413,3 +413,75 @@ def test_engine_streaming_sentence_accumulator_turn_flush():
     assert len(hud_texts) == 2
     assert "Remaining thoughts" in hud_texts[1]
 
+
+def test_engine_odd_audio_bytes_downlink():
+    """Verify _handle_bridge_audio does not crash with ValueError when downlink audio has odd byte length."""
+    from core.messages import AudioDownlinkPayload
+    engine = HybridAgentEngine(livekit_mode="mock")
+    odd_payload = AudioDownlinkPayload(
+        audio_data=b"\x01\x02\x03",  # 3 bytes, odd length
+        sample_rate=24000,
+        channels=1,
+    )
+    # Must not raise ValueError: buffer size must be a multiple of element size
+    engine._handle_bridge_audio(odd_payload)
+    assert engine.ring_buffer.size == 1  # 2 bytes consumed as 1 sample
+
+
+def test_engine_playback_clock_task_drains_and_resets_vad():
+    """Verify BUG-002: Autonomous 20ms playback clock task drains ring buffer and resets VAD playback active."""
+    import asyncio
+    from core.messages import AudioDownlinkPayload
+
+    async def _run():
+        engine = HybridAgentEngine(livekit_mode="mock")
+        await engine.initialize()
+
+        # Feed 40ms of audio (960 samples at 24kHz = 1920 bytes)
+        pcm_bytes = (np.full(960, 5000, dtype=np.int16)).tobytes()
+        downlink = AudioDownlinkPayload(audio_data=pcm_bytes, sample_rate=24000)
+        engine._handle_bridge_audio(downlink)
+
+        assert engine.ring_buffer.is_actively_playing()
+        assert engine.vad.is_playback_active
+
+        # Wait ~80ms for 20ms clock task to drain the 40ms audio (2-3 ticks)
+        await asyncio.sleep(0.080)
+
+        assert not engine.ring_buffer.is_actively_playing()
+        assert not engine.vad.is_playback_active
+
+        await engine.shutdown()
+
+    asyncio.run(_run())
+
+
+def test_engine_external_drain_resets_vad_playback_active():
+    """Verify that if ring buffer is drained externally, the clock task still deactivates VAD playback state."""
+    import asyncio
+    from core.messages import AudioDownlinkPayload
+
+    async def _run():
+        engine = HybridAgentEngine(livekit_mode="mock")
+        await engine.initialize()
+
+        # Feed audio
+        pcm_bytes = (np.full(480, 5000, dtype=np.int16)).tobytes()
+        engine._handle_bridge_audio(AudioDownlinkPayload(audio_data=pcm_bytes, sample_rate=24000))
+        assert engine.vad.is_playback_active
+
+        # Drain externally before clock tick
+        engine.ring_buffer.read(480)
+        assert not engine.ring_buffer.is_actively_playing()
+
+        # Wait for next clock tick (25ms)
+        await asyncio.sleep(0.040)
+
+        # Clock task must have detected inactive buffer and cleared VAD state
+        assert not engine.vad.is_playback_active
+
+        await engine.shutdown()
+
+    asyncio.run(_run())
+
+

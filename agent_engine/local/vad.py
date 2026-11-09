@@ -96,7 +96,7 @@ class VoiceActivityDetector:
         """Indicates whether speaker playback is currently active."""
         return self._is_playback_active
 
-    def set_playback_active(self, active: bool, reference_signal: Optional[np.ndarray] = None) -> None:
+    def set_playback_active(self, active: bool, reference_signal: Optional[Any] = None) -> None:
         """Set acoustic echo suppression state to prevent self-triggering."""
         self._is_playback_active = bool(active)
         if active and reference_signal is not None:

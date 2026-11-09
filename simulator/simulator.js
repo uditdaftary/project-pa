@@ -235,6 +235,16 @@ function handleIncomingPacket(buffer) {
       break;
     }
     case MSG_HUD_DRAW_BITMAP: {
+      if (payloadBytes.length > 0 && payloadBytes[0] === 0x7B) {
+        try {
+          const jsonStr = new TextDecoder().decode(payloadBytes);
+          const cmd = JSON.parse(jsonStr);
+          const rawBmp = cmd.bitmap_data ? new TextEncoder().encode(cmd.bitmap_data) : new Uint8Array(0);
+          drawHudBitmap(cmd.x || 0, cmd.y || 0, cmd.width || 640, cmd.height || 200, rawBmp);
+          appendLog(`HUD BITMAP [${cmd.width || 640}x${cmd.height || 200}]`, "hud");
+          break;
+        } catch (e) {}
+      }
       if (payloadBytes.byteLength >= 8) {
         const bView = new DataView(payloadBytes.buffer, payloadBytes.byteOffset, 8);
         const x = bView.getUint16(0, false);
@@ -260,7 +270,18 @@ function handleIncomingPacket(buffer) {
       break;
     }
     case MSG_HEARTBEAT: {
-      appendLog("HEARTBEAT ECHO PONG", "system");
+      try {
+        const jsonStr = new TextDecoder().decode(payloadBytes);
+        const hb = JSON.parse(jsonStr);
+        if (hb.echo && hb.timestamp_ms) {
+          const rtt = Math.max(0, Date.now() - hb.timestamp_ms);
+          appendLog(`HEARTBEAT ECHO PONG (${rtt}ms RTT)`, "system");
+        } else {
+          appendLog("HEARTBEAT ECHO PONG", "system");
+        }
+      } catch (e) {
+        appendLog("HEARTBEAT ECHO PONG", "system");
+      }
       break;
     }
   }
@@ -289,7 +310,13 @@ function playAudioDownlink(payloadBytes) {
   const pcmBytes = payloadBytes.subarray(headerLen);
   const sampleCount = Math.floor(pcmBytes.length / 2);
   if (sampleCount <= 0) return;
-  const int16Samples = new Int16Array(pcmBytes.buffer, pcmBytes.byteOffset, sampleCount);
+
+  let int16Samples;
+  if (pcmBytes.byteOffset % 2 === 0) {
+    int16Samples = new Int16Array(pcmBytes.buffer, pcmBytes.byteOffset, sampleCount);
+  } else {
+    int16Samples = new Int16Array(pcmBytes.slice().buffer, 0, sampleCount);
+  }
 
   // Meter animation
   let sumSquare = 0;
