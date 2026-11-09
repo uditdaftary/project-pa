@@ -72,6 +72,16 @@ Project PA creates a personalized, physical-first interface between a user and t
     - `0x08` (`MSG_CROSS_SURFACE_ROUTING`): Display (`private_hud` / `cast_ambient`) and Audio (`private_ear` / `ambient_room`) destinations.
 - **Rationale:** Ensures complete parity between software simulator and physical embedded hardware. Firmware drivers and UI layouts developed on the simulator run on hardware with zero protocol translation.
 
+### ADR-008: Modular Monorepo Architecture
+- **Decision:** Organize the software stack within a unified, cleanly decoupled monorepo:
+  - `core/`: Shared protocol definitions, TLV binary packet packing/unpacking, typed schemas.
+  - `agent_engine/`: Hybrid AI agent core (`local/` adapting `interactive-voice-agent` + `cloud/` LiveKit bridge).
+  - `gateway/`: FastAPI + WebSocket/WebRTC media orchestrator and surface dispatcher.
+  - `simulator/`: Optical 640×200 green MicroLED HUD eyebox, bone-conduction VPU simulation, and private ear telemetry.
+  - `ambient_screen/`: Cast target receiver rendering rich full-screen React/Markdown artifacts.
+  - `tests/`: Comprehensive unit tests for protocol serialization, audio routing, and latency benchmarks.
+- **Rationale:** Minimizes multi-repo dependency drift, enables single-command startup, and guarantees protocol synchronization.
+
 ---
 
 ## 3. Hardware Roadmap & Strategy
