@@ -58,6 +58,20 @@ Project PA creates a personalized, physical-first interface between a user and t
   2. **Pluggable Cloud Multimodal Bridge**: LiveKit Agents 1.x `AgentSession` connecting to Google Gemini Live / OpenAI Realtime for sub-250ms native speech-to-speech and egocentric visual perception when cloud connectivity is active.
 - **Rationale:** Guarantees 100% offline development, zero API cost during prototyping, and seamless escalation to cutting-edge multimodal vision models.
 
+### ADR-007: Unified Binary/JSON Packet Framing Protocol
+- **Decision:** Standardize on a unified Type-Length-Value (TLV) packet framing protocol sharing identical schemas across WebSocket (Simulator / Wi-Fi) and BLE GATT/L2CAP (future Nordic nRF5340 / ESP32 hardware):
+  - Magic Bytes: `0x50` ('P'), `0x41` ('A')
+  - Message Types:
+    - `0x01` (`MSG_AUDIO_UPLINK`): 16kHz Opus/PCM frames from VPU + Knowles mic.
+    - `0x02` (`MSG_AUDIO_DOWNLINK`): Audio output chunks to USound MEMS / Tarvos 1.2 amp.
+    - `0x03` (`MSG_HUD_DRAW_TEXT`): Text layout commands (x, y, text, font, clear_flag).
+    - `0x04` (`MSG_HUD_DRAW_BITMAP`): 1-bit monochrome 640×200 MicroLED display buffer tiles.
+    - `0x05` (`MSG_IMU_TELEMETRY`): 6-DoF pitch, yaw, roll, nod/shake gestures, gaze vector.
+    - `0x06` (`MSG_VPU_VAD_EVENT`): Bone-conduction vocal cord resonance trigger (whisper detection).
+    - `0x07` (`MSG_SYSTEM_CONTROL`): Battery %, brightness, thermal telemetry, sleep/wake states.
+    - `0x08` (`MSG_CROSS_SURFACE_ROUTING`): Display (`private_hud` / `cast_ambient`) and Audio (`private_ear` / `ambient_room`) destinations.
+- **Rationale:** Ensures complete parity between software simulator and physical embedded hardware. Firmware drivers and UI layouts developed on the simulator run on hardware with zero protocol translation.
+
 ---
 
 ## 3. Hardware Roadmap & Strategy
