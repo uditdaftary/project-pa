@@ -143,6 +143,7 @@ function drawHudText(cmd) {
 
   ctx.fillStyle = "#00ff66";
   ctx.font = `${cmd.font_size || 14}px monospace`;
+  ctx.textBaseline = "top";
   ctx.shadowColor = "rgba(0, 255, 102, 0.75)";
   ctx.shadowBlur = 6;
 
@@ -266,16 +267,26 @@ function handleIncomingPacket(buffer) {
 }
 
 // --- Audio Playback (USound Ganymede MEMS Private Ear) ---
+let downlinkNextStartTime = 0;
+
+function resetDownlinkPlayback() {
+  if (audioCtx) {
+    downlinkNextStartTime = audioCtx.currentTime;
+  }
+}
+
 function playAudioDownlink(payloadBytes) {
   if (payloadBytes.length < 8) return;
-  const view = new DataView(payloadBytes.buffer, payloadBytes.byteOffset, 8);
+  const is10Byte = payloadBytes.length >= 10;
+  const headerLen = is10Byte ? 10 : 8;
+  const view = new DataView(payloadBytes.buffer, payloadBytes.byteOffset, headerLen);
   const sampleRate = view.getUint16(0, false);
   const channels = view.getUint8(2);
-  const dest = view.getUint8(3); // 0 = private_ear, 1 = ambient_room
+  const dest = is10Byte ? view.getUint8(4) : view.getUint8(3); // 0 = private_ear, 1 = ambient_room
 
   if (dest !== 0) return; // Only play if routed to private ear
 
-  const pcmBytes = payloadBytes.subarray(8);
+  const pcmBytes = payloadBytes.subarray(headerLen);
   const sampleCount = Math.floor(pcmBytes.length / 2);
   if (sampleCount <= 0) return;
   const int16Samples = new Int16Array(pcmBytes.buffer, pcmBytes.byteOffset, sampleCount);
@@ -290,9 +301,9 @@ function playAudioDownlink(payloadBytes) {
   earAudioBar.style.width = `${pct}%`;
   setTimeout(() => { earAudioBar.style.width = "0%"; }, 200);
 
-  // Audio Context playback
+  // Audio Context playback with timeline scheduling (BUG-011)
   if (!audioCtx) {
-    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
   }
   if (audioCtx.state === "suspended") {
     audioCtx.resume();
@@ -307,7 +318,9 @@ function playAudioDownlink(payloadBytes) {
   const source = audioCtx.createBufferSource();
   source.buffer = audioBuffer;
   source.connect(audioCtx.destination);
-  source.start();
+  downlinkNextStartTime = Math.max(audioCtx.currentTime, downlinkNextStartTime);
+  source.start(downlinkNextStartTime);
+  downlinkNextStartTime += audioBuffer.duration;
 
   appendLog(`USound MEMS Downlink: ${int16Samples.length} samples (${sampleRate}Hz)`, "hud");
 }
@@ -409,8 +422,8 @@ document.getElementById("lookCastBtn").addEventListener("click", () => {
 });
 
 document.getElementById("glanceAwayBtn").addEventListener("click", () => {
-  yawSlider.value = 45;
-  yawVal.innerText = "45°";
+  yawSlider.value = 65;
+  yawVal.innerText = "65°";
   sendIMUTelemetry("none");
   appendLog("Glanced away from screen", "route");
 });
@@ -448,7 +461,7 @@ async function toggleMicrophone() {
   } else {
     try {
       if (!audioCtx) {
-        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
       }
       if (audioCtx.state === "suspended") {
         await audioCtx.resume();
@@ -471,14 +484,17 @@ async function toggleMicrophone() {
         const inputData = e.inputBuffer.getChannelData(0);
 
         let sumSq = 0;
-        const pcmBuffer = new ArrayBuffer(8 + inputData.length * 2);
+        // 10-byte audio header: sample_rate (H), channels (B), codec_id (B), is_vpu (B), reserved (B), vpu_energy (f)
+        const pcmBuffer = new ArrayBuffer(10 + inputData.length * 2);
         const pcmView = new DataView(pcmBuffer);
         pcmView.setUint16(0, 16000, false);
         pcmView.setUint8(2, 1);
-        pcmView.setUint8(3, isWhisperActive ? 1 : 0);
-        pcmView.setFloat32(4, isWhisperActive ? 0.9 : 0.05, false);
+        pcmView.setUint8(3, 0); // codec_id: 0 = pcm_s16le
+        pcmView.setUint8(4, isWhisperActive ? 1 : 0);
+        pcmView.setUint8(5, 0);
+        pcmView.setFloat32(6, isWhisperActive ? 0.9 : 0.05, false);
 
-        const int16 = new Int16Array(pcmBuffer, 8, inputData.length);
+        const int16 = new Int16Array(pcmBuffer, 10, inputData.length);
         for (let i = 0; i < inputData.length; i++) {
           const s = Math.max(-1, Math.min(1, inputData[i]));
           int16[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
@@ -489,12 +505,20 @@ async function toggleMicrophone() {
         const pct = Math.min(100, Math.round(rms * 250));
         micAudioBar.style.width = `${pct}%`;
 
+        if (rms > 0.04) {
+          resetDownlinkPlayback();
+        }
+
         const packet = packTLV(MSG_AUDIO_UPLINK, new Uint8Array(pcmBuffer));
         ws.send(packet);
       };
 
       source.connect(micProcessor);
-      micProcessor.connect(audioCtx.destination);
+      // Mute mic output to local destination to eliminate feedback screech (BUG-010)
+      const muteGain = audioCtx.createGain();
+      muteGain.gain.value = 0.0;
+      micProcessor.connect(muteGain);
+      muteGain.connect(audioCtx.destination);
 
       isMicActive = true;
       micToggleBtn.innerText = "Stop Mic Input";
@@ -511,6 +535,8 @@ async function toggleMicrophone() {
 function sendSimulatedAudio(textPrompt) {
   if (!ws || ws.readyState !== WebSocket.OPEN) return;
 
+  resetDownlinkPlayback();
+
   // 1. Notify gateway of intended voice query prompt
   const ctrlPayload = {
     command: "voice_query",
@@ -518,16 +544,18 @@ function sendSimulatedAudio(textPrompt) {
   };
   ws.send(packJSONMessage(MSG_SYSTEM_CONTROL, ctrlPayload));
 
-  // 2. Generate speech burst (1920 samples = 4 frames of 16kHz speech)
+  // 2. Generate speech burst (1920 samples = 4 frames of 16kHz speech) with 10-byte header
   const speechSamples = 1920;
-  const pcmBuffer = new ArrayBuffer(8 + speechSamples * 2);
+  const pcmBuffer = new ArrayBuffer(10 + speechSamples * 2);
   const pcmView = new DataView(pcmBuffer);
   pcmView.setUint16(0, 16000, false);
   pcmView.setUint8(2, 1); // channels
-  pcmView.setUint8(3, isWhisperActive ? 1 : 0); // is_vpu
-  pcmView.setFloat32(4, isWhisperActive ? 0.9 : 0.1, false);
+  pcmView.setUint8(3, 0); // codec_id
+  pcmView.setUint8(4, isWhisperActive ? 1 : 0); // is_vpu
+  pcmView.setUint8(5, 0);
+  pcmView.setFloat32(6, isWhisperActive ? 0.9 : 0.1, false);
 
-  const int16 = new Int16Array(pcmBuffer, 8, speechSamples);
+  const int16 = new Int16Array(pcmBuffer, 10, speechSamples);
   for (let i = 0; i < speechSamples; i++) {
     int16[i] = Math.sin(i * 0.1) * (isWhisperActive ? 8000 : 20000);
   }
@@ -537,12 +565,14 @@ function sendSimulatedAudio(textPrompt) {
 
   // 3. Send trailing silence (23 frames = 11040 samples) to trigger VAD turn completion
   const silenceSamples = 11040;
-  const silBuffer = new ArrayBuffer(8 + silenceSamples * 2);
+  const silBuffer = new ArrayBuffer(10 + silenceSamples * 2);
   const silView = new DataView(silBuffer);
   silView.setUint16(0, 16000, false);
   silView.setUint8(2, 1);
   silView.setUint8(3, 0);
-  silView.setFloat32(4, 0.0, false);
+  silView.setUint8(4, 0);
+  silView.setUint8(5, 0);
+  silView.setFloat32(6, 0.0, false);
   const silencePacket = packTLV(MSG_AUDIO_UPLINK, new Uint8Array(silBuffer));
   ws.send(silencePacket);
 
@@ -563,6 +593,15 @@ document.getElementById("testPromptBtn3").addEventListener("click", () => {
 document.getElementById("testPromptBtn4").addEventListener("click", () => {
   sendSimulatedAudio("What is the system status?");
 });
+
+// Keepalive heartbeat timer every 15s (BUG-024)
+setInterval(() => {
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    const hb = { timestamp_ms: Date.now(), seq: seqNum, echo: false };
+    const packet = packJSONMessage(MSG_HEARTBEAT, hb);
+    ws.send(packet);
+  }
+}, 15000);
 
 // Init
 window.addEventListener("DOMContentLoaded", () => {
