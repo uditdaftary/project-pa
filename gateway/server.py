@@ -59,7 +59,7 @@ app = FastAPI(
 # CORS middleware for local browser simulator access
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -108,7 +108,7 @@ def get_status():
 
 
 @app.post("/route")
-def override_route(req: RouteOverrideRequest):
+async def override_route(req: RouteOverrideRequest):
     """Manually force cross-surface display or audio routing."""
     res = {}
     if req.display_surface:
@@ -133,7 +133,6 @@ async def websocket_wearable_endpoint(websocket: WebSocket):
         while True:
             # Receive raw binary or text frame
             data = await websocket.receive_bytes()
-            audio_router.total_uplink_bytes += len(data)
 
             packets = parser.feed(data)
             for msg_type_val, seq, payload_bytes in packets:
@@ -142,6 +141,7 @@ async def websocket_wearable_endpoint(websocket: WebSocket):
                     msg_type = MessageType(msg_type_val)
 
                     if msg_type == MessageType.MSG_AUDIO_UPLINK and isinstance(payload, AudioUplinkPayload):
+                        audio_router.record_audio_uplink(len(payload.audio_data))
                         await engine.process_audio_uplink(payload)
 
                     elif msg_type == MessageType.MSG_IMU_TELEMETRY and isinstance(payload, ImuTelemetryPayload):
@@ -156,15 +156,21 @@ async def websocket_wearable_endpoint(websocket: WebSocket):
 
                     elif msg_type == MessageType.MSG_HEARTBEAT:
                         hb_seq = payload.seq if isinstance(payload, HeartbeatPayload) else seq
-                        pong = encode_message(MessageType.MSG_HEARTBEAT, HeartbeatPayload(echo=True, seq=hb_seq), seq=hb_seq)
-                        await websocket.send_bytes(pong)
+                        hb_ts = payload.timestamp_ms if isinstance(payload, HeartbeatPayload) else 0
+                        audio_router.record_heartbeat(hb_ts)
+                        pong = encode_message(MessageType.MSG_HEARTBEAT, HeartbeatPayload(echo=True, seq=hb_seq, timestamp_ms=hb_ts), seq=hb_seq)
+                        conn = audio_router.wearable_connections.get(websocket)
+                        if conn:
+                            await conn.send(pong)
+                        else:
+                            await websocket.send_bytes(pong)
 
                 except Exception as e:
                     pass
 
-    except WebSocketDisconnect:
-        audio_router.unregister_wearable(websocket)
-    except Exception:
+    except (WebSocketDisconnect, Exception):
+        pass
+    finally:
         audio_router.unregister_wearable(websocket)
 
 
@@ -177,7 +183,11 @@ async def websocket_ambient_endpoint(websocket: WebSocket):
 
     # Send initial routing state immediately to the newly connected ambient screen
     initial_route = encode_message(MessageType.MSG_CROSS_SURFACE_ROUTING, audio_router.active_surface_route)
-    await websocket.send_bytes(initial_route)
+    conn = audio_router.ambient_connections.get(websocket)
+    if conn:
+        await conn.send(initial_route)
+    else:
+        await websocket.send_bytes(initial_route)
 
     try:
         while True:
@@ -186,10 +196,18 @@ async def websocket_ambient_endpoint(websocket: WebSocket):
             for msg_type_val, seq, payload_bytes in packets:
                 # Handle ambient uplink (e.g. touch/interaction or heartbeat)
                 if msg_type_val == MessageType.MSG_HEARTBEAT:
-                    pong = encode_message(MessageType.MSG_HEARTBEAT, HeartbeatPayload(echo=True, seq=seq))
-                    await websocket.send_bytes(pong)
+                    payload = decode_message(msg_type_val, payload_bytes)
+                    hb_seq = payload.seq if isinstance(payload, HeartbeatPayload) else seq
+                    hb_ts = payload.timestamp_ms if isinstance(payload, HeartbeatPayload) else 0
+                    audio_router.record_heartbeat(hb_ts)
+                    pong = encode_message(MessageType.MSG_HEARTBEAT, HeartbeatPayload(echo=True, seq=hb_seq, timestamp_ms=hb_ts), seq=hb_seq)
+                    conn = audio_router.ambient_connections.get(websocket)
+                    if conn:
+                        await conn.send(pong)
+                    else:
+                        await websocket.send_bytes(pong)
 
-    except WebSocketDisconnect:
-        audio_router.unregister_ambient(websocket)
-    except Exception:
+    except (WebSocketDisconnect, Exception):
+        pass
+    finally:
         audio_router.unregister_ambient(websocket)
