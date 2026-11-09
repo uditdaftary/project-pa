@@ -223,13 +223,101 @@ async def websocket_ambient_endpoint(websocket: WebSocket):
         audio_router.unregister_ambient(websocket)
 
 
+@app.websocket("/ws")
+async def websocket_coexistence_endpoint(websocket: WebSocket):
+    """Coexistence endpoint multiplexing wearable TLV protocol and local voice agent JSON.
+    
+    Prevents 403 Forbidden connection rejection loops when interactive-voice-agent
+    is run alternately or alongside Project PA on port 8000.
+    """
+    await websocket.accept()
+    audio_router.register_wearable(websocket)
+    parser = TLVStreamParser(verify_crc=True)
+
+    try:
+        while True:
+            message = await websocket.receive()
+            if "bytes" in message and message["bytes"]:
+                data = message["bytes"]
+                packets = parser.feed(data)
+                for msg_type_val, seq, payload_bytes in packets:
+                    try:
+                        payload = decode_message(msg_type_val, payload_bytes)
+                        msg_type = MessageType(msg_type_val)
+
+                        if msg_type == MessageType.MSG_AUDIO_UPLINK and isinstance(payload, AudioUplinkPayload):
+                            audio_router.record_audio_uplink(len(payload.audio_data))
+                            await engine.process_audio_uplink(payload)
+
+                        elif msg_type == MessageType.MSG_IMU_TELEMETRY and isinstance(payload, ImuTelemetryPayload):
+                            await engine.process_imu_telemetry(payload)
+
+                        elif msg_type == MessageType.MSG_VPU_VAD_EVENT and isinstance(payload, VpuVadEventPayload):
+                            await engine.process_vpu_vad_event(payload)
+
+                        elif msg_type == MessageType.MSG_SYSTEM_CONTROL and isinstance(payload, SystemControlPayload):
+                            if payload.voice_query:
+                                engine.set_voice_query(payload.voice_query)
+
+                        elif msg_type == MessageType.MSG_HEARTBEAT:
+                            hb_seq = payload.seq if isinstance(payload, HeartbeatPayload) else seq
+                            hb_ts = payload.timestamp_ms if isinstance(payload, HeartbeatPayload) else 0
+                            audio_router.record_heartbeat(hb_ts)
+                            pong = encode_message(MessageType.MSG_HEARTBEAT, HeartbeatPayload(echo=True, seq=hb_seq, timestamp_ms=hb_ts), seq=hb_seq)
+                            conn = audio_router.wearable_connections.get(websocket)
+                            if conn:
+                                await conn.send(pong)
+                            else:
+                                await websocket.send_bytes(pong)
+                    except Exception:
+                        pass
+            elif "text" in message and message["text"]:
+                # Coexistence handshake response for interactive-voice-agent clients
+                sync_payload = {
+                    "type": "state_sync",
+                    "status": "ready",
+                    "server": "project-pa-gateway",
+                    "info": "Project PA Gateway active. Wearable HUD at /simulator/, Ambient Screen at /ambient/"
+                }
+                await websocket.send_json(sync_payload)
+
+    except (WebSocketDisconnect, Exception):
+        pass
+    finally:
+        audio_router.unregister_wearable(websocket)
+
+
+def find_available_port(preferred_port: int = 8080, max_attempts: int = 20) -> int:
+    """Finds an open port starting from preferred_port without conflicting with existing services."""
+    import socket
+    for p in range(preferred_port, preferred_port + max_attempts):
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            try:
+                s.bind(("127.0.0.1", p))
+                return p
+            except OSError:
+                continue
+    return preferred_port
+
+
 if __name__ == "__main__":
     import uvicorn
 
     host = os.environ.get("PA_GATEWAY_HOST", "127.0.0.1")
-    port = int(os.environ.get("PA_GATEWAY_PORT", "8000"))
-    print(f"Starting Project PA Gateway on http://{host}:{port}")
-    print(f"  - Wearable HUD Simulator:  http://{host}:{port}/simulator/")
-    print(f"  - Ambient Screen Receiver: http://{host}:{port}/ambient/")
+    if "PA_GATEWAY_PORT" in os.environ:
+        port = int(os.environ["PA_GATEWAY_PORT"])
+    else:
+        # Default to 8080 to seamlessly coexist with interactive-voice-agent (which uses 8000)
+        port = find_available_port(preferred_port=8080)
+
+    print("\n" + "=" * 65)
+    print(" PROJECT PA DUAL-SURFACE GATEWAY RUNNING")
+    print(f" URL:                       http://{host}:{port}/")
+    print(f" Wearable HUD Simulator:    http://{host}:{port}/simulator/")
+    print(f" Ambient Screen Receiver:   http://{host}:{port}/ambient/")
+    print(f" Port:                      {port} (Coexists with voice-agent on 8000)")
+    print("=" * 65 + "\n")
     uvicorn.run("gateway.server:app", host=host, port=port, reload=False)
+
 

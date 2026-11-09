@@ -105,6 +105,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   - **Interactive Dialogue Input**: Added text query input box allowing direct prompt submission alongside mic and simulated voice buttons.
   - **VAD Turn Completion Flush**: Fixed turn-completion flush in [`agent_engine/cloud/livekit_bridge.py`](file:///c:/Projects/PA/agent_engine/cloud/livekit_bridge.py) calling `on_text_output("")` and added two-tone audio chime (D5+A5).
   - **Mic Sensitivity Tuning**: Adjusted VAD baseline energy threshold to 120.0 (`-48.7 dBFS`) in [`agent_engine/local/vad.py`](file:///c:/Projects/PA/agent_engine/local/vad.py).
+- **Voice Agent Coexistence & Dedicated Gateway Port (75 Passing Tests)**:
+  - **Dedicated Port Default (8080)**: Configured Project PA to run on port `8080` by default with smart auto-binding (`find_available_port(8080)`), completely isolating it from `interactive-voice-agent` on port `8000` and enabling both servers to run simultaneously.
+  - **`/ws` Coexistence Handler**: Added fallback WebSocket route `@app.websocket("/ws")` in [`gateway/server.py`](file:///c:/Projects/PA/gateway/server.py) accepting both binary TLV frames and voice agent JSON handshakes without returning `403 Forbidden`.
+  - **Added Regression Test**: Added `test_websocket_coexistence_endpoint` in [`tests/test_gateway.py`](file:///c:/Projects/PA/tests/test_gateway.py).
+
 
 
 

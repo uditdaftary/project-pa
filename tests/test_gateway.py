@@ -215,3 +215,25 @@ def test_root_redirect(client):
     assert response.headers["location"] == "/simulator/"
 
 
+def test_websocket_coexistence_endpoint(client):
+    """Verify /ws coexistence endpoint handles both TLV frames and interactive-voice-agent text JSON."""
+    # 1. Test JSON text message from interactive-voice-agent client
+    with client.websocket_connect("/ws") as ws:
+        ws.send_text('{"type": "select_voice", "voice_id": "alloy"}')
+        resp = ws.receive_json()
+        assert resp["type"] == "state_sync"
+        assert resp["server"] == "project-pa-gateway"
+
+    # 2. Test binary TLV frame over /ws
+    with client.websocket_connect("/ws") as ws:
+        ping = encode_message(MessageType.MSG_HEARTBEAT, HeartbeatPayload(echo=False, seq=99), seq=99)
+        ws.send_bytes(ping)
+        resp_bytes = ws.receive_bytes()
+        mtype, seq, payload_bytes = unpack_tlv(resp_bytes)
+        assert mtype == MessageType.MSG_HEARTBEAT
+        decoded: HeartbeatPayload = decode_message(mtype, payload_bytes)
+        assert decoded.echo is True
+        assert decoded.seq == 99
+
+
+
