@@ -216,6 +216,41 @@ header {
   font-family: monospace;
 }
 
+/* Dashboard Cards Grid (BUG-026) */
+.cards-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 16px;
+  margin-top: 4px;
+}
+
+.cards-grid.hidden {
+  display: none;
+}
+
+.dashboard-tile {
+  background: var(--bg-card);
+  border: 1px solid var(--border-card);
+  border-radius: 10px;
+  padding: 18px;
+  backdrop-filter: blur(12px);
+}
+
+.dashboard-tile h4 {
+  color: var(--accent-cyan);
+  font-size: 15px;
+  font-weight: 600;
+  margin-bottom: 8px;
+  border-bottom: 1px solid rgba(0, 240, 255, 0.15);
+  padding-bottom: 6px;
+}
+
+.dashboard-tile .tile-body {
+  font-size: 13px;
+  color: var(--text-main);
+  line-height: 1.5;
+}
+
 /* Audio Spectrum Visualizer */
 .audio-spectrum-card {
   background: var(--bg-card);
