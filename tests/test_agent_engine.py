@@ -334,6 +334,43 @@ def test_ring_buffer_floating_point_dac_scaling():
     assert pytest.approx(float_out[3], 0.001) == 0.5
 
 
+def test_router_explicit_cast_protected_from_gaze_away():
+    """Verify BUG-005: explicit tool cast is NOT reverted by IMU glance away."""
+    router = CrossSurfaceRouter()
+    # Explicit tool sets display to CAST_AMBIENT
+    router.set_display_surface(DisplaySurface.CAST_AMBIENT, reason="tool_call")
+    assert router.current_display == DisplaySurface.CAST_AMBIENT
+
+    # User glances away (yaw = 65 deg, dot product < 0.50)
+    glance_away_imu = ImuTelemetryPayload(
+        gaze_vector=[0.90, 0.0, 0.42],  # dot = 0.42 < (0.75 - 0.25 = 0.50)
+        gaze_confidence=0.9,
+    )
+    res = router.evaluate_imu_telemetry(glance_away_imu)
+    assert res is None
+    # Must remain in CAST_AMBIENT
+    assert router.current_display == DisplaySurface.CAST_AMBIENT
+
+
+def test_router_gaze_cast_reverted_by_glance_away():
+    """Verify BUG-005: gaze-triggered cast IS properly reverted when glancing away."""
+    router = CrossSurfaceRouter()
+    # Trigger via gaze
+    look_imu = ImuTelemetryPayload(
+        gaze_vector=[0.0, 0.0, 1.0],
+        gaze_confidence=0.9,
+    )
+    router.evaluate_imu_telemetry(look_imu)
+    assert router.current_display == DisplaySurface.CAST_AMBIENT
+
+    # Glance away
+    glance_away_imu = ImuTelemetryPayload(
+        gaze_vector=[0.90, 0.0, 0.42],
+        gaze_confidence=0.9,
+    )
+    res = router.evaluate_imu_telemetry(glance_away_imu)
+    assert res is not None
+    assert router.current_display == DisplaySurface.PRIVATE_HUD
 
 
 def test_vad_noise_floor_fixed_threshold_clamping():

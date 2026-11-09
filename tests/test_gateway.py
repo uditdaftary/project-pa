@@ -122,3 +122,55 @@ def test_system_control_voice_query_handling(client):
 
         assert engine.pending_voice_query == "What is the battery level?"
         engine.pending_voice_query = None
+
+
+def test_gateway_telemetry_uplink_and_latency_updated(client):
+    """Verify BUG-018: last_uplink_ts and last_roundtrip_latency_ms are updated."""
+    import time
+    with client.websocket_connect("/ws/wearable") as ws:
+        # Send audio uplink
+        raw_audio = b"\x00\x01" * 80
+        packet = encode_message(MessageType.MSG_AUDIO_UPLINK, raw_audio, seq=1)
+        ws.send_bytes(packet)
+        time.sleep(0.05)
+
+        assert audio_router.last_uplink_ts > 0.0
+
+        # Send heartbeat with client timestamp
+        client_ts = int((time.time() - 0.025) * 1000)  # 25ms ago
+        hb = HeartbeatPayload(timestamp_ms=client_ts, seq=2)
+        hb_pkt = encode_message(MessageType.MSG_HEARTBEAT, hb, seq=2)
+        ws.send_bytes(hb_pkt)
+        ws.receive_bytes()  # Consume pong
+
+        assert audio_router.last_roundtrip_latency_ms >= 0.0
+
+
+def test_client_connection_selective_audio_drop():
+    """Verify BUG-013: Queue drops audio frames on backpressure while keeping UI/routing messages."""
+    import asyncio
+    from gateway.audio_router import ClientConnection
+
+    class DummyWS:
+        def __init__(self):
+            self.sent = []
+        async def send_bytes(self, data):
+            self.sent.append(data)
+        async def close(self):
+            pass
+
+    async def _run():
+        dummy_ws = DummyWS()
+        conn = ClientConnection(dummy_ws, max_queue_size=2)
+        # Fill queue to capacity (2 items)
+        await conn.send(b"crit_1", is_audio=False)
+        await conn.send(b"crit_2", is_audio=False)
+        assert conn.queue.full()
+
+        # Audio packet under backpressure should be dropped (return False)
+        dropped = await conn.send(b"audio_dropped", is_audio=True)
+        assert dropped is False
+        assert conn.queue.qsize() == 2
+
+    asyncio.run(_run())
+

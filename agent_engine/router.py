@@ -7,6 +7,7 @@ Implements ADR-002 (Dynamic Visual Routing) & ADR-003 (Asymmetric Audio Routing)
 """
 
 from __future__ import annotations
+import enum
 import math
 from typing import Callable, List, Optional
 from core.messages import (
@@ -18,6 +19,12 @@ from core.messages import (
     VpuVadEventPayload,
     CrossSurfaceRoutingPayload,
 )
+
+
+class RoutingOrigin(str, enum.Enum):
+    """Origin source of display cast routing."""
+    GAZE = "gaze"
+    EXPLICIT_TOOL = "explicit_tool"
 
 
 class CrossSurfaceRouter:
@@ -34,6 +41,7 @@ class CrossSurfaceRouter:
         self.current_audio = default_audio
         self.ambient_gaze_threshold = ambient_gaze_threshold
         self.rich_content_char_threshold = rich_content_char_threshold
+        self.cast_origin: Optional[RoutingOrigin] = None
 
         # Target ambient screen direction vector in eyewear coordinate frame:
         # e.g., Ambient screen is situated at [0.0, 0.0, 1.0] (straight ahead) or slight offset
@@ -66,6 +74,7 @@ class CrossSurfaceRouter:
         """Explicitly switch display surface."""
         if self.current_display != surface:
             self.current_display = surface
+            self.cast_origin = RoutingOrigin.EXPLICIT_TOOL if surface == DisplaySurface.CAST_AMBIENT else None
             return self._notify(reason=reason)
         return CrossSurfaceRoutingPayload(
             display_surface=self.current_display,
@@ -94,6 +103,7 @@ class CrossSurfaceRouter:
         if imu.gesture == GestureType.LOOK_AT_AMBIENT:
             if self.current_display != DisplaySurface.CAST_AMBIENT:
                 self.current_display = DisplaySurface.CAST_AMBIENT
+                self.cast_origin = RoutingOrigin.GAZE
                 return self._notify(reason="imu_look_at_ambient_gesture", confidence=imu.gaze_confidence)
             return None
 
@@ -110,14 +120,17 @@ class CrossSurfaceRouter:
                 if dot_prod >= self.ambient_gaze_threshold and imu.gaze_confidence >= 0.7:
                     if self.current_display != DisplaySurface.CAST_AMBIENT:
                         self.current_display = DisplaySurface.CAST_AMBIENT
+                        self.cast_origin = RoutingOrigin.GAZE
                         return self._notify(
                             reason=f"gaze_alignment_trigger (dot={dot_prod:.2f})",
                             confidence=imu.gaze_confidence * dot_prod,
                         )
                 # If gaze moved significantly away from ambient screen, revert to private HUD
+                # BUG-005: Only auto-revert if origin was GAZE
                 elif dot_prod < (self.ambient_gaze_threshold - 0.25):
-                    if self.current_display == DisplaySurface.CAST_AMBIENT:
+                    if self.current_display == DisplaySurface.CAST_AMBIENT and self.cast_origin == RoutingOrigin.GAZE:
                         self.current_display = DisplaySurface.PRIVATE_HUD
+                        self.cast_origin = None
                         return self._notify(reason="gaze_glance_away_revert", confidence=1.0)
 
         return None
