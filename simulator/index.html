@@ -53,6 +53,34 @@
         </div>
       </div>
 
+      <!-- Live Ambient Screen Mirror (Dual-Surface Cast Target) -->
+      <div class="panel-card ambient-mirror-panel" id="ambientMirrorPanel">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+          <h3>Ambient Screen Cast Mirror</h3>
+          <div style="display: flex; gap: 8px; align-items: center;">
+            <span class="cast-pill standby" id="ambientMirrorPill">STANDBY</span>
+            <a href="/ambient/" target="_blank" class="popout-link" title="Open full 1080p ambient display in separate window">Open Standalone Screen &nearr;</a>
+          </div>
+        </div>
+        <div class="ambient-mirror-content" id="ambientMirrorContent">
+          <div class="ambient-mirror-standby" id="ambientMirrorStandby">
+            <div class="mini-reticle"></div>
+            <p style="font-size: 12px; color: var(--text-dim); text-align: center;">
+              Ambient Cast Screen in Standby.<br>
+              Align gaze with screen (0° Yaw) or click <strong>"LOOK AT SCREEN (CAST)"</strong> to hand off rich visuals.
+            </p>
+          </div>
+          <div class="ambient-mirror-active hidden" id="ambientMirrorActive">
+            <div class="mirror-card-header">
+              <span id="ambientMirrorTitle" style="color: var(--accent-cyan); font-weight: 600;">Agent Output</span>
+              <span style="font-size: 10px; color: var(--text-dim);">CAST ACTIVE</span>
+            </div>
+            <div id="ambientMirrorBody" class="mirror-markdown-body"></div>
+            <div id="ambientMirrorCards" class="mirror-cards-grid"></div>
+          </div>
+        </div>
+      </div>
+
       <!-- Real-time Packet Log -->
       <div class="panel-card">
         <h3>Wearable TLV Stream Log</h3>
@@ -81,7 +109,7 @@
       <div class="panel-card">
         <h3>6-DoF IMU & Look-to-Cast Gaze Targeting</h3>
         <p style="font-size: 11px; color: var(--text-dim); margin-bottom: 10px;">
-          Align gaze vector with ambient screen to dynamically transfer visual UI.
+          Gaze vector alignment: 0° Yaw faces Ambient Screen target [0, 0, 1]. &gt;45° Yaw looks at real world (HUD).
         </p>
 
         <div class="slider-group">
@@ -92,8 +120,8 @@
           </div>
           <div class="slider-row">
             <label>YAW</label>
-            <input type="range" id="yawSlider" min="-180" max="180" value="0">
-            <span id="yawVal">0°</span>
+            <input type="range" id="yawSlider" min="-180" max="180" value="50">
+            <span id="yawVal">50° (HUD)</span>
           </div>
           <div class="slider-row">
             <label>ROLL</label>
@@ -103,7 +131,7 @@
         </div>
 
         <div class="btn-group">
-          <button id="lookCastBtn" style="border-color: var(--accent-orange); color: var(--accent-orange);">LOOK TO CAST SCREEN</button>
+          <button id="lookCastBtn" style="border-color: var(--accent-orange); color: var(--accent-orange);">LOOK AT SCREEN (CAST)</button>
           <button id="glanceAwayBtn">GLANCE AWAY (HUD)</button>
           <button id="nodBtn">NOD GESTURE</button>
           <button id="shakeBtn">SHAKE GESTURE</button>
@@ -111,9 +139,17 @@
         </div>
       </div>
 
-      <!-- Quick Speech Test Injection -->
+      <!-- Interactive Agent Voice & Text Prompt Box -->
       <div class="panel-card">
-        <h3>Simulated Voice Commands</h3>
+        <h3>Interactive Agent Dialogue</h3>
+        <p style="font-size: 11px; color: var(--text-dim); margin-bottom: 8px;">
+          Type any custom prompt or click a simulated command below:
+        </p>
+        <form id="queryForm" style="display: flex; gap: 8px; margin-bottom: 12px;">
+          <input type="text" id="queryInput" placeholder="Ask your agent (e.g. 'Show metrics on screen')..." style="flex: 1; padding: 8px 12px; background: rgba(0,0,0,0.4); border: 1px solid var(--border-color); border-radius: 6px; color: #fff; font-size: 12px;">
+          <button type="submit" id="sendQueryBtn" style="padding: 8px 16px; background: var(--accent-green); color: #000; font-weight: 600; border: none; border-radius: 6px; cursor: pointer;">SEND</button>
+        </form>
+
         <div class="btn-group">
           <button id="testPromptBtn1">"Show metrics on screen"</button>
           <button id="testPromptBtn2">"Switch back to HUD"</button>

@@ -189,9 +189,10 @@ class GatewayAudioRouter:
         await self.broadcast_binary(self.wearable_connections, packet, is_audio=False)
 
     async def _on_engine_ambient_content(self, payload: AmbientDisplayPayload) -> None:
-        """Dispatch rich ambient content packet to ambient screen sockets."""
+        """Dispatch rich ambient content packet to ambient screen sockets and wearable simulator."""
         packet = encode_message(MessageType.MSG_AMBIENT_DISPLAY_CONTENT, payload)
         await self.broadcast_binary(self.ambient_connections, packet, is_audio=False)
+        await self.broadcast_binary(self.wearable_connections, packet, is_audio=False)
 
     async def _on_engine_audio_downlink(self, payload: AudioDownlinkPayload) -> None:
         """Asymmetrically route downlink audio based on destination."""

@@ -302,3 +302,138 @@ button.active {
 .log-entry.hud { color: var(--hud-green); }
 .log-entry.route { color: var(--accent-orange); }
 .log-entry.vpu { color: var(--accent-cyan); }
+
+/* Ambient Mirror Panel & Dual Surface Presentation */
+.ambient-mirror-panel {
+  border-color: rgba(0, 240, 255, 0.25);
+}
+
+.popout-link {
+  font-size: 11px;
+  color: var(--accent-cyan);
+  text-decoration: none;
+  border: 1px solid rgba(0, 240, 255, 0.3);
+  padding: 3px 8px;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+}
+
+.popout-link:hover {
+  background: var(--accent-cyan);
+  color: #000;
+}
+
+.cast-pill {
+  font-size: 10px;
+  padding: 3px 8px;
+  border-radius: 12px;
+  background: rgba(0, 255, 102, 0.15);
+  color: var(--hud-green);
+  border: 1px solid rgba(0, 255, 102, 0.4);
+  text-transform: uppercase;
+  font-weight: 600;
+}
+
+.cast-pill.standby {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-dim);
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
+.ambient-mirror-content {
+  background: #04080a;
+  border: 1px solid rgba(0, 240, 255, 0.15);
+  border-radius: 6px;
+  padding: 14px;
+  min-height: 120px;
+}
+
+.ambient-mirror-standby {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  gap: 10px;
+}
+
+.mini-reticle {
+  width: 36px;
+  height: 36px;
+  border: 1.5px dashed rgba(0, 240, 255, 0.4);
+  border-radius: 50%;
+  animation: pulse 3s infinite ease-in-out;
+}
+
+@keyframes pulse {
+  0%, 100% { transform: scale(1); opacity: 0.5; }
+  50% { transform: scale(1.1); opacity: 1; }
+}
+
+.ambient-mirror-active {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.hidden {
+  display: none !important;
+}
+
+.mirror-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid rgba(0, 240, 255, 0.15);
+  padding-bottom: 6px;
+}
+
+.mirror-markdown-body {
+  font-size: 12px;
+  line-height: 1.5;
+  color: #d4e2d8;
+}
+
+.mirror-markdown-body h1, .mirror-markdown-body h2, .mirror-markdown-body h3 {
+  color: var(--accent-cyan);
+  margin: 6px 0 4px 0;
+}
+
+.mirror-markdown-body table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 8px 0;
+  font-size: 11px;
+}
+
+.mirror-markdown-body th, .mirror-markdown-body td {
+  border: 1px solid rgba(0, 240, 255, 0.2);
+  padding: 4px 8px;
+  text-align: left;
+}
+
+.mirror-markdown-body th {
+  background: rgba(0, 240, 255, 0.1);
+  color: var(--accent-cyan);
+}
+
+.mirror-cards-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.mirror-tile {
+  background: rgba(0, 240, 255, 0.05);
+  border: 1px solid rgba(0, 240, 255, 0.2);
+  border-radius: 4px;
+  padding: 8px;
+}
+
+.mirror-tile h4 {
+  font-size: 11px;
+  color: var(--accent-cyan);
+  margin-bottom: 4px;
+}
+

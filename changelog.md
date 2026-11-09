@@ -98,6 +98,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   - Added `if __name__ == "__main__":` entrypoint to [`gateway/server.py`](file:///c:/Projects/PA/gateway/server.py) invoking `uvicorn.run(...)` on configurable `PA_GATEWAY_HOST` and `PA_GATEWAY_PORT`.
   - Removed premature `from gateway.server import ...` from [`gateway/__init__.py`](file:///c:/Projects/PA/gateway/__init__.py), eliminating `<frozen runpy>:128: RuntimeWarning: 'gateway.server' found in sys.modules` and preventing auto-exit on startup.
   - Added `@app.get("/")` root redirect to `/simulator/` and regression test `test_root_redirect` in [`tests/test_gateway.py`](file:///c:/Projects/PA/tests/test_gateway.py).
+- **Dual-Surface Real-Time Agent Turnaround, Eyebox Text Wrap & Ambient Mirror (74 Passing Tests)**:
+  - **HUD Overlap Elimination**: Built multi-line auto-scrolling terminal engine with 590px word wrapping and clean line vertical layout (`y=32, 54, 76, 98, 120, 142`), eliminating text overlapping on the 640x200 MicroLED canvas.
+  - **Live Ambient Screen Mirror in Simulator**: Embedded real-time Ambient Screen companion panel in [`simulator/index.html`](file:///c:/Projects/PA/simulator/index.html) and dual-broadcast `MSG_AMBIENT_DISPLAY_CONTENT` in [`gateway/audio_router.py`](file:///c:/Projects/PA/gateway/audio_router.py) so ambient mode works directly inside the simulator page.
+  - **Gaze Anchor Real-World Neutral Default**: Initialized simulator `yaw` to 50° (real-world view / `PRIVATE_HUD`), requiring deliberate 0° gaze alignment or clicking "LOOK AT SCREEN (CAST)" to hand off to ambient mode.
+  - **Interactive Dialogue Input**: Added text query input box allowing direct prompt submission alongside mic and simulated voice buttons.
+  - **VAD Turn Completion Flush**: Fixed turn-completion flush in [`agent_engine/cloud/livekit_bridge.py`](file:///c:/Projects/PA/agent_engine/cloud/livekit_bridge.py) calling `on_text_output("")` and added two-tone audio chime (D5+A5).
+  - **Mic Sensitivity Tuning**: Adjusted VAD baseline energy threshold to 120.0 (`-48.7 dBFS`) in [`agent_engine/local/vad.py`](file:///c:/Projects/PA/agent_engine/local/vad.py).
+
 
 
 

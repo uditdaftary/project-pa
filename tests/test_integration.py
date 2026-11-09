@@ -107,3 +107,60 @@ def test_end_to_end_cross_surface_handoff(client):
             card: AmbientDisplayPayload = decode_message(mtype_c, p_c)
             assert card.title == "System Telemetry"
             assert "230ms" in card.content
+
+            # Wearable simulator mirror should also receive MSG_AMBIENT_DISPLAY_CONTENT packet
+            wearable_content_packet = ws_wearable.receive_bytes()
+            mtype_w2, _, p_w2 = unpack_tlv(wearable_content_packet)
+            assert mtype_w2 == MessageType.MSG_AMBIENT_DISPLAY_CONTENT
+            card_w: AmbientDisplayPayload = decode_message(mtype_w2, p_w2)
+            assert card_w.title == "System Telemetry"
+
+
+def test_voice_query_turn_and_hud_text_completion(client):
+    """Verify that voice queries generate real-time agent responses on HUD with audio and complete buffer flush."""
+    import struct
+    import numpy as np
+
+    with client.websocket_connect("/ws/wearable") as ws_wearable:
+        # Switch display to private_hud
+        engine.router.set_display_surface(DisplaySurface.PRIVATE_HUD, reason="test_init")
+        time.sleep(0.05)
+
+        # 1. Send system control voice query
+        ctrl_pkt = encode_message(
+            MessageType.MSG_SYSTEM_CONTROL,
+            {"command": "voice_query", "voice_query": "What is the system status?"},
+            seq=201
+        )
+        ws_wearable.send_bytes(ctrl_pkt)
+
+        # 2. Send 16kHz speech burst (4 frames = 1920 samples)
+        hdr = struct.pack(">HBBBBf", 16000, 1, 0, 0, 0, 0.1)
+        speech = (np.sin(np.arange(1920) * 0.1) * 20000).astype(np.int16).tobytes()
+        ws_wearable.send_bytes(encode_message(MessageType.MSG_AUDIO_UPLINK, hdr + speech, seq=202))
+
+        # 3. Send trailing silence (23 frames = 11040 samples) to trigger VAD turn completion
+        sil_hdr = struct.pack(">HBBBBf", 16000, 1, 0, 0, 0, 0.0)
+        sil = np.zeros(11040, dtype=np.int16).tobytes()
+        ws_wearable.send_bytes(encode_message(MessageType.MSG_AUDIO_UPLINK, sil_hdr + sil, seq=203))
+
+        time.sleep(0.1)
+
+        # Receive responses: exactly 2 packets (HUD text + audio downlink)
+        received_hud_text = []
+        received_audio = False
+
+        for _ in range(2):
+            pkt = ws_wearable.receive_bytes()
+            mtype, seq, payload = unpack_tlv(pkt)
+            if mtype == MessageType.MSG_HUD_DRAW_TEXT:
+                decoded = decode_message(mtype, payload)
+                received_hud_text.append(decoded.text)
+            elif mtype == MessageType.MSG_AUDIO_DOWNLINK:
+                received_audio = True
+
+        assert len(received_hud_text) > 0, "Expected HUD text response from agent"
+        assert any("nominal" in t.lower() or "latency" in t.lower() or "system" in t.lower() for t in received_hud_text)
+        assert received_audio is True, "Expected audio chime downlink from agent"
+        assert engine.sentence_accumulator.buffer == "", "Expected sentence accumulator to be completely flushed"
+

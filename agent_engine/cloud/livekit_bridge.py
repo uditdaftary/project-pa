@@ -148,18 +148,25 @@ class LiveKitBridge:
         elif "speaker" in query_lower or "room audio" in query_lower:
             self.tool_set_audio_destination("ambient_room")
             response_text = "Audio routed to the ambient room speaker."
+        elif "status" in query_lower or "system" in query_lower:
+            response_text = "System nominal: VPU SNR +18dB, latency 240ms, battery 94%, all sensors active."
         else:
-            response_text = f"Understood. Project PA running with sub-350ms latency. Processing: '{query}'."
+            response_text = f"Understood: '{query}'. PA Engine running at sub-350ms latency."
 
         if self.on_text_output:
             self.on_text_output(response_text)
+            # Flush trailing accumulator chunks on turn completion
+            self.on_text_output("")
 
-        # Generate a small synthesized audio tone (24kHz PCM mono) to simulate speech output
+        # Generate a pleasant synthesized two-tone audio chime (440Hz + 880Hz, 24kHz PCM mono, 0.25s)
         sample_rate = 24000
-        duration_s = 0.1
+        duration_s = 0.25
         t = np.linspace(0, duration_s, int(sample_rate * duration_s), endpoint=False)
-        sine_wave = (np.sin(2 * np.pi * 440.0 * t) * 8000).astype(np.int16)
-        audio_bytes = sine_wave.tobytes()
+        sine_wave = (
+            np.sin(2 * np.pi * 587.33 * t) * 0.5 +  # D5
+            np.sin(2 * np.pi * 880.0 * t) * 0.5    # A5
+        ) * 12000
+        audio_bytes = sine_wave.astype(np.int16).tobytes()
 
         downlink = AudioDownlinkPayload(
             sample_rate=sample_rate,

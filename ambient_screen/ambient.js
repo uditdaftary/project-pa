@@ -233,6 +233,10 @@ function applyRouting(routing) {
     statusPill.innerText = "ACTIVE CAST";
     standbyView.classList.add("hidden");
     activeCastView.classList.remove("hidden");
+    if (!contentBody.innerHTML || contentBody.innerHTML.trim() === "") {
+      contentTitle.innerText = "Gaze Target Locked";
+      contentBody.innerHTML = "<p style='color: var(--text-muted);'>Gaze aligned with Ambient Screen. Prompt your agent to cast visual dashboards or high-density metrics.</p>";
+    }
   } else {
     statusPill.className = "cast-pill standby";
     statusPill.innerText = "STANDBY";

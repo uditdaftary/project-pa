@@ -106,49 +106,87 @@ function packJSONMessage(msgType, obj) {
   return packTLV(msgType, enc.encode(jsonStr));
 }
 
-// --- HUD Canvas Rendering ---
-function initCanvas() {
+// --- HUD Terminal Multi-Line Engine (Eliminates text overlapping) ---
+const hudLines = [];
+let hudStatusHeader = "HUD // PRIVATE MODE";
+
+function renderHudTerminal() {
   ctx.fillStyle = "#020502";
   ctx.fillRect(0, 0, 640, 200);
 
-  // Default welcome prompt
-  drawHudText({
-    x: 20,
-    y: 35,
-    text: "PROJECT PA // MICROLED HUD ACTIVE",
-    clear_screen: true,
-    font_size: 13,
-  });
-  drawHudText({
-    x: 20,
-    y: 75,
-    text: "SUB-350MS EMBODIED PHYSICAL AI AGENT",
-    clear_screen: false,
-    font_size: 14,
-  });
-  drawHudText({
-    x: 20,
-    y: 115,
-    text: "READY: VPU WHISPER ACTIVE | LOOK-TO-CAST READY",
-    clear_screen: false,
-    font_size: 11,
-  });
+  // 1. Top status line
+  ctx.fillStyle = "rgba(0, 255, 102, 0.4)";
+  ctx.font = "10px monospace";
+  ctx.textBaseline = "top";
+  ctx.fillText(`[ ${hudStatusHeader} ]`, 20, 10);
+  const routeText = `${dispRouteVal ? dispRouteVal.innerText : "HUD"} | ${audioRouteVal ? audioRouteVal.innerText : "EAR"}`;
+  const routeW = ctx.measureText(routeText).width;
+  ctx.fillText(routeText, 620 - routeW, 10);
+
+  // Subtle separator line
+  ctx.strokeStyle = "rgba(0, 255, 102, 0.2)";
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(20, 24);
+  ctx.lineTo(620, 24);
+  ctx.stroke();
+
+  // 2. Multi-line wrapped text
+  ctx.fillStyle = "#00ff66";
+  ctx.font = "13px monospace";
+  ctx.shadowColor = "rgba(0, 255, 102, 0.75)";
+  ctx.shadowBlur = 4;
+
+  const startY = 32;
+  const lineHeight = 22;
+  const maxLines = 6;
+  const visible = hudLines.slice(-maxLines);
+
+  for (let i = 0; i < visible.length; i++) {
+    ctx.fillText(visible[i], 20, startY + i * lineHeight);
+  }
+  ctx.shadowBlur = 0;
+}
+
+function addHudLine(line, clearFirst = false) {
+  if (clearFirst) {
+    hudLines.length = 0;
+  }
+  if (!line) {
+    renderHudTerminal();
+    return;
+  }
+
+  // Word wrap text to 590px max line width
+  ctx.font = "13px monospace";
+  const words = line.split(" ");
+  let cur = "";
+
+  for (const w of words) {
+    const test = cur ? `${cur} ${w}` : w;
+    if (ctx.measureText(test).width > 590) {
+      if (cur) hudLines.push(cur);
+      cur = w;
+    } else {
+      cur = test;
+    }
+  }
+  if (cur) {
+    hudLines.push(cur);
+  }
+  renderHudTerminal();
+}
+
+function initCanvas() {
+  hudLines.length = 0;
+  hudLines.push("PROJECT PA // MICROLED HUD ACTIVE");
+  hudLines.push("READY: VPU WHISPER ACTIVE | LOOK-TO-CAST READY");
+  hudLines.push("SAY OR TYPE A COMMAND TO BEGIN...");
+  renderHudTerminal();
 }
 
 function drawHudText(cmd) {
-  if (cmd.clear_screen) {
-    ctx.fillStyle = "#020502";
-    ctx.fillRect(0, 0, 640, 200);
-  }
-
-  ctx.fillStyle = "#00ff66";
-  ctx.font = `${cmd.font_size || 14}px monospace`;
-  ctx.textBaseline = "top";
-  ctx.shadowColor = "rgba(0, 255, 102, 0.75)";
-  ctx.shadowBlur = 6;
-
-  ctx.fillText(cmd.text, cmd.x, cmd.y);
-  ctx.shadowBlur = 0; // reset
+  addHudLine(cmd.text, Boolean(cmd.clear_screen));
 }
 
 function drawHudBitmap(x, y, width, height, bitmapData) {
@@ -266,7 +304,17 @@ function handleIncomingPacket(buffer) {
       const routing = JSON.parse(jsonStr);
       dispRouteVal.innerText = routing.display_surface.toUpperCase();
       audioRouteVal.innerText = routing.audio_destination.toUpperCase();
+      hudStatusHeader = `HUD // ${routing.display_surface.toUpperCase()}`;
+      renderHudTerminal();
+      updateAmbientMirrorRouting(routing);
       appendLog(`SURFACE ROUTE: ${routing.display_surface} / ${routing.audio_destination} (${routing.reason})`, "route");
+      break;
+    }
+    case MSG_AMBIENT_DISPLAY_CONTENT: {
+      const jsonStr = new TextDecoder().decode(payloadBytes);
+      const content = JSON.parse(jsonStr);
+      renderAmbientMirrorContent(content);
+      appendLog(`AMBIENT CAST: "${content.title || 'Agent Output'}"`, "route");
       break;
     }
     case MSG_HEARTBEAT: {
@@ -283,6 +331,119 @@ function handleIncomingPacket(buffer) {
         appendLog("HEARTBEAT ECHO PONG", "system");
       }
       break;
+    }
+  }
+}
+
+// --- Ambient Cast Mirror Helpers ---
+function escapeHtml(str) {
+  if (!str) return "";
+  return String(str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+function formatMarkdown(text) {
+  if (!text) return "";
+  let html = escapeHtml(text)
+    .replace(/```([\s\S]*?)```/g, '<pre><code>$1</code></pre>')
+    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+    .replace(/^### (.*$)/gim, '<h3 style="margin: 8px 0 4px 0; color: #00f0ff;">$1</h3>')
+    .replace(/^## (.*$)/gim, '<h2 style="margin: 12px 0 6px 0; color: #00f0ff;">$1</h2>')
+    .replace(/^# (.*$)/gim, '<h1 style="margin: 16px 0 8px 0; color: #00f0ff;">$1</h1>');
+
+  if (html.includes("|")) {
+    const lines = html.split("\n");
+    const out = [];
+    let inTable = false;
+    let isHdr = true;
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i].trim();
+      if (line.startsWith("|") && line.endsWith("|")) {
+        if (line.includes("---")) continue;
+        const cols = line.split("|").slice(1, -1);
+        if (!inTable) {
+          inTable = true;
+          isHdr = true;
+          out.push("<table><thead><tr>");
+        } else {
+          out.push("<tr>");
+        }
+        const tag = isHdr ? "th" : "td";
+        out.push(cols.map(c => `<${tag}>${c.trim()}</${tag}>`).join(""));
+        if (isHdr) {
+          out.push("</tr></thead><tbody>");
+          isHdr = false;
+        } else {
+          out.push("</tr>");
+        }
+      } else {
+        if (inTable) {
+          inTable = false;
+          out.push("</tbody></table>");
+        }
+        out.push(line);
+      }
+    }
+    if (inTable) out.push("</tbody></table>");
+    html = out.join("\n");
+  }
+
+  return html.replace(/\n\n+/g, '<br><br>');
+}
+
+function updateAmbientMirrorRouting(routing) {
+  const isCast = routing.display_surface === "cast_ambient";
+  const pill = document.getElementById("ambientMirrorPill");
+  const standby = document.getElementById("ambientMirrorStandby");
+  const active = document.getElementById("ambientMirrorActive");
+
+  if (pill) {
+    pill.className = isCast ? "cast-pill" : "cast-pill standby";
+    pill.innerText = isCast ? "ACTIVE CAST" : "STANDBY";
+  }
+  if (!isCast) {
+    if (standby) standby.classList.remove("hidden");
+    if (active) active.classList.add("hidden");
+  } else {
+    if (standby) standby.classList.add("hidden");
+    if (active) active.classList.remove("hidden");
+  }
+}
+
+function renderAmbientMirrorContent(data) {
+  const pill = document.getElementById("ambientMirrorPill");
+  const standby = document.getElementById("ambientMirrorStandby");
+  const active = document.getElementById("ambientMirrorActive");
+  const title = document.getElementById("ambientMirrorTitle");
+  const body = document.getElementById("ambientMirrorBody");
+  const cards = document.getElementById("ambientMirrorCards");
+
+  if (pill) {
+    pill.className = "cast-pill";
+    pill.innerText = "ACTIVE CAST";
+  }
+  if (standby) standby.classList.add("hidden");
+  if (active) active.classList.remove("hidden");
+
+  if (title) title.innerText = data.title || "Agent Output";
+  if (body) body.innerHTML = formatMarkdown(data.content);
+
+  if (cards) {
+    cards.innerHTML = "";
+    if (Array.isArray(data.cards) && data.cards.length > 0) {
+      data.cards.forEach(c => {
+        const t = document.createElement("div");
+        t.className = "mirror-tile";
+        t.innerHTML = `<h4>${escapeHtml(c.title || "")}</h4><div>${formatMarkdown(c.body || c.content || "")}</div>`;
+        cards.appendChild(t);
+      });
+      cards.classList.remove("hidden");
+    } else {
+      cards.classList.add("hidden");
     }
   }
 }
@@ -424,7 +585,12 @@ pitchSlider.addEventListener("input", () => {
   sendIMUTelemetry();
 });
 yawSlider.addEventListener("input", () => {
-  yawVal.innerText = `${yawSlider.value}°`;
+  const y = parseFloat(yawSlider.value);
+  if (Math.abs(y) <= 20) {
+    yawVal.innerText = `${y}° (Facing Screen)`;
+  } else {
+    yawVal.innerText = `${y}° (Real World / HUD)`;
+  }
   sendIMUTelemetry();
 });
 rollSlider.addEventListener("input", () => {
@@ -442,17 +608,17 @@ document.getElementById("lookCastBtn").addEventListener("click", () => {
   yawSlider.value = 0;
   rollSlider.value = 0;
   pitchVal.innerText = "0°";
-  yawVal.innerText = "0°";
+  yawVal.innerText = "0° (Facing Screen)";
   rollVal.innerText = "0°";
   sendIMUTelemetry("look_at_ambient");
-  appendLog("Look-to-cast gaze trigger emitted", "route");
+  appendLog("Look-to-cast gaze trigger emitted (0° Yaw)", "route");
 });
 
 document.getElementById("glanceAwayBtn").addEventListener("click", () => {
-  yawSlider.value = 65;
-  yawVal.innerText = "65°";
+  yawSlider.value = 50;
+  yawVal.innerText = "50° (Real World / HUD)";
   sendIMUTelemetry("none");
-  appendLog("Glanced away from screen", "route");
+  appendLog("Glanced away from screen (50° Yaw, reverting to HUD)", "route");
 });
 
 document.getElementById("nodBtn").addEventListener("click", () => {
@@ -606,19 +772,42 @@ function sendSimulatedAudio(textPrompt) {
   appendLog(`Uplink: "${textPrompt}" sent (VAD turn triggered)`, "vpu");
 }
 
+function submitUserQuery(text) {
+  const input = document.getElementById("queryInput");
+  const query = (text || (input ? input.value : "")).trim();
+  if (!query) return;
+
+  // Visual feedback on HUD
+  addHudLine(`USER > "${query}"`, true);
+  addHudLine("AGENT > Processing...", false);
+  appendLog(`User Query: "${query}"`, "vpu");
+
+  sendSimulatedAudio(query);
+
+  if (input) input.value = "";
+}
+
+const queryForm = document.getElementById("queryForm");
+if (queryForm) {
+  queryForm.addEventListener("submit", (e) => {
+    e.preventDefault();
+    submitUserQuery();
+  });
+}
+
 micToggleBtn.addEventListener("click", toggleMicrophone);
 
 document.getElementById("testPromptBtn1").addEventListener("click", () => {
-  sendSimulatedAudio("Show metrics on screen");
+  submitUserQuery("Show metrics on screen");
 });
 document.getElementById("testPromptBtn2").addEventListener("click", () => {
-  sendSimulatedAudio("Switch back to HUD");
+  submitUserQuery("Switch back to HUD");
 });
 document.getElementById("testPromptBtn3").addEventListener("click", () => {
-  sendSimulatedAudio("Route audio to room");
+  submitUserQuery("Route audio to room");
 });
 document.getElementById("testPromptBtn4").addEventListener("click", () => {
-  sendSimulatedAudio("What is the system status?");
+  submitUserQuery("What is the system status?");
 });
 
 // Keepalive heartbeat timer every 15s (BUG-024)

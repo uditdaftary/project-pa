@@ -118,10 +118,10 @@ class HybridAgentEngine:
             remaining = self.sentence_accumulator.flush()
             for chunk in remaining:
                 self._safe_dispatch(self.on_hud_text, HudDrawTextPayload(
-                    x=10,
-                    y=20,
+                    x=20,
+                    y=38,
                     text=chunk,
-                    font_size=14,
+                    font_size=13,
                     clear_screen=False,
                     teleprompter_mode=True
                 ))
@@ -132,16 +132,30 @@ class HybridAgentEngine:
         if recommended_surface == DisplaySurface.CAST_AMBIENT or self.router.current_display == DisplaySurface.CAST_AMBIENT:
             if self.router.current_display != DisplaySurface.CAST_AMBIENT:
                 self.router.set_display_surface(DisplaySurface.CAST_AMBIENT, reason="rich_content_density_auto_route")
-            self._safe_dispatch(self.on_ambient_content, AmbientDisplayPayload(title="Agent Response", content=text))
+            self._safe_dispatch(self.on_ambient_content, AmbientDisplayPayload(
+                title="Agent Response",
+                content=text,
+                cards=[{"title": "Agent Response", "body": text}]
+            ))
+            # Provide instant feedback on HUD so eyewear user sees what was cast
+            hud_notification = "CASTING TO SCREEN > " + (text[:55] + "..." if len(text) > 55 else text)
+            self._safe_dispatch(self.on_hud_text, HudDrawTextPayload(
+                x=20,
+                y=38,
+                text=hud_notification,
+                font_size=13,
+                clear_screen=True,
+                teleprompter_mode=True
+            ))
         else:
             # Route to private HUD: feed sentence accumulator without premature flush (BUG-015)
             chunks = self.sentence_accumulator.feed(text)
             for idx, chunk in enumerate(chunks):
                 self._safe_dispatch(self.on_hud_text, HudDrawTextPayload(
-                    x=10,
-                    y=20,
+                    x=20,
+                    y=38,
                     text=chunk,
-                    font_size=14,
+                    font_size=13,
                     clear_screen=(idx == 0),
                     teleprompter_mode=True
                 ))

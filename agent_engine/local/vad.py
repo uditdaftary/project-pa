@@ -21,7 +21,7 @@ class VoiceActivityDetector:
         self,
         sample_rate: int = 16000,
         frame_duration_ms: int = 30,
-        energy_threshold: Optional[float] = 300.0,
+        energy_threshold: Optional[float] = 120.0,
         snr_margin_db: float = 12.0,
         hangover_frames: int = 6,
         turn_completion_frames: int = 16,
