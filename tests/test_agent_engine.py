@@ -313,5 +313,66 @@ def test_hybrid_engine_voice_query_intent():
 
         # Should have routed to CAST_AMBIENT
         assert engine.router.current_display == DisplaySurface.CAST_AMBIENT
+        await engine.shutdown()
 
     asyncio.run(_run())
+
+
+def test_ring_buffer_floating_point_dac_scaling():
+    """Verify BUG-004: AudioRingBuffer.read_into normalizes int16 to [-1.0, 1.0] for float arrays."""
+    rb = AudioRingBuffer(capacity_samples=1000, sample_rate=16000)
+    # Write max int16 value (32767)
+    rb.write(np.array([32767, -32768, 0, 16384], dtype=np.int16))
+
+    float_out = np.zeros(4, dtype=np.float32)
+    read_samples = rb.read_into(float_out)
+    assert read_samples == 4
+    # Max value must be <= 1.0 and >= -1.0, NOT 32767.0
+    assert float_out[0] <= 1.0
+    assert float_out[1] >= -1.0
+    assert pytest.approx(float_out[0], 0.001) == 32767.0 / 32768.0
+    assert pytest.approx(float_out[3], 0.001) == 0.5
+
+
+
+
+def test_vad_noise_floor_fixed_threshold_clamping():
+    """Verify BUG-020: VAD threshold never drops below _fixed_threshold_dbfs."""
+    vad = VoiceActivityDetector(sample_rate=16000, fixed_threshold_dbfs=-45.0)
+    assert vad.threshold_dbfs >= -45.0
+
+    vad.reset()
+    assert vad.threshold_dbfs >= -45.0
+
+    # Process extreme silence (-90 dBFS)
+    silence = np.zeros(480, dtype=np.int16)
+    vad.process(silence)
+    assert vad.threshold_dbfs >= -45.0
+
+
+def test_engine_streaming_sentence_accumulator_turn_flush():
+    """Verify BUG-015: Tokens accumulate until sentence boundary; remainder flushes on turn completion."""
+    engine = HybridAgentEngine(livekit_mode="mock")
+    hud_texts = []
+    engine.on_hud_text = lambda p: hud_texts.append(p.text) if p.text else None
+
+    # Feed partial sentence
+    engine._handle_bridge_text("The quick brown fox ")
+    # Should NOT have flushed yet because no sentence boundary
+    assert len(hud_texts) == 0
+
+    # Feed sentence closing followed by space
+    engine._handle_bridge_text("jumps over the lazy dog. ")
+    # Still waiting for next sentence capitalization to confirm boundary
+    assert len(hud_texts) == 0
+
+    # Next sentence capitalized word triggers boundary completion
+    engine._handle_bridge_text("Remaining thoughts")
+    assert len(hud_texts) == 1
+    assert "The quick brown fox jumps over the lazy dog." in hud_texts[0]
+
+    # Turn complete signal (empty text) flushes remaining accumulator buffer
+    engine._handle_bridge_text("")
+    assert len(hud_texts) == 2
+    assert "Remaining thoughts" in hud_texts[1]
+

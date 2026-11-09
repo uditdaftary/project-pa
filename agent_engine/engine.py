@@ -12,6 +12,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from typing import Callable, List, Optional
+import numpy as np
 
 from core.messages import (
     MessageType,
@@ -76,6 +77,7 @@ class HybridAgentEngine:
         self.on_routing_change: Optional[Callable[[CrossSurfaceRoutingPayload], None]] = None
 
         self.pending_voice_query: Optional[str] = None
+        self._playback_task: Optional[asyncio.Task] = None
 
         # Wire router notifications
         self.router.add_listener(self._on_router_event)
@@ -90,7 +92,11 @@ class HybridAgentEngine:
             if asyncio.iscoroutine(res):
                 try:
                     loop = asyncio.get_running_loop()
-                    loop.create_task(res)
+                    task = loop.create_task(res)
+                    def _log_exc(t: asyncio.Task) -> None:
+                        if not t.cancelled() and t.exception():
+                            logger.error(f"Unhandled exception in background dispatch callback: {t.exception()}", exc_info=t.exception())
+                    task.add_done_callback(_log_exc)
                 except RuntimeError:
                     new_loop = asyncio.new_event_loop()
                     try:
@@ -108,19 +114,29 @@ class HybridAgentEngine:
     def _handle_bridge_text(self, text: str) -> None:
         """Handle incoming streaming text from agent bridge."""
         if not text:
-            # Clear command
+            # Turn completion / clear command: flush remaining sentence accumulator (BUG-015)
+            remaining = self.sentence_accumulator.flush()
+            for chunk in remaining:
+                self._safe_dispatch(self.on_hud_text, HudDrawTextPayload(
+                    x=10,
+                    y=20,
+                    text=chunk,
+                    font_size=14,
+                    clear_screen=False,
+                    teleprompter_mode=True
+                ))
             self._safe_dispatch(self.on_hud_text, HudDrawTextPayload(text="", clear_screen=True))
             return
 
-        # Check content routing
+        # Check content routing (BUG-003: current_display == CAST_AMBIENT or recommended == CAST_AMBIENT)
         recommended_surface = self.router.evaluate_content_complexity(text)
-        if recommended_surface == DisplaySurface.CAST_AMBIENT and self.router.current_display != DisplaySurface.CAST_AMBIENT:
-            self.router.set_display_surface(DisplaySurface.CAST_AMBIENT, reason="rich_content_density_auto_route")
+        if recommended_surface == DisplaySurface.CAST_AMBIENT or self.router.current_display == DisplaySurface.CAST_AMBIENT:
+            if self.router.current_display != DisplaySurface.CAST_AMBIENT:
+                self.router.set_display_surface(DisplaySurface.CAST_AMBIENT, reason="rich_content_density_auto_route")
             self._safe_dispatch(self.on_ambient_content, AmbientDisplayPayload(title="Agent Response", content=text))
         else:
-            # Route to private HUD: feed sentence accumulator
+            # Route to private HUD: feed sentence accumulator without premature flush (BUG-015)
             chunks = self.sentence_accumulator.feed(text)
-            chunks.extend(self.sentence_accumulator.flush())
             for idx, chunk in enumerate(chunks):
                 self._safe_dispatch(self.on_hud_text, HudDrawTextPayload(
                     x=10,
@@ -138,6 +154,11 @@ class HybridAgentEngine:
 
         # Write to ring buffer for tracking/playback
         self.ring_buffer.write(downlink.audio_data)
+
+        # Enable Acoustic Echo Suppression (AES) during agent audio playback (BUG-006)
+        ref_samples = np.frombuffer(downlink.audio_data, dtype=np.int16)
+        self.vad.set_playback_active(True, reference_signal=ref_samples)
+
         self._safe_dispatch(self.on_audio_downlink, downlink)
 
     def _handle_bridge_ambient(self, payload: AmbientDisplayPayload) -> None:
@@ -159,9 +180,34 @@ class HybridAgentEngine:
 
     # --- Inward Processing Methods ---
 
+    async def _playback_clock_task(self) -> None:
+        """Autonomous 20ms playback clock task that drains ring buffer during active playback (BUG-002)."""
+        samples_per_tick = int(self.downlink_sample_rate * 0.020)
+        try:
+            while True:
+                await asyncio.sleep(0.020)
+                if self.ring_buffer.is_actively_playing():
+                    self.ring_buffer.read(samples_per_tick)
+                    if not self.ring_buffer.is_actively_playing():
+                        self.vad.set_playback_active(False)
+        except asyncio.CancelledError:
+            pass
+
     async def initialize(self) -> None:
         """Initialize engine components and agent bridge."""
         await self.bridge.connect()
+        if self._playback_task is None or self._playback_task.done():
+            self._playback_task = asyncio.create_task(self._playback_clock_task())
+
+    async def shutdown(self) -> None:
+        """Gracefully terminate engine background clock and bridge."""
+        if self._playback_task and not self._playback_task.done():
+            self._playback_task.cancel()
+            try:
+                await self._playback_task
+            except asyncio.CancelledError:
+                pass
+        await self.bridge.disconnect()
 
     async def process_audio_uplink(self, uplink: AudioUplinkPayload) -> None:
         """Process incoming 16kHz audio from wearable Knowles mic and ST LIS25BA VPU."""
@@ -170,6 +216,9 @@ class HybridAgentEngine:
             uplink.audio_data,
             vpu_energy=uplink.vpu_energy if uplink.is_vpu else None
         )
+
+        # Forward frame to LiveKit agent bridge (BUG-027)
+        await self.bridge.send_audio_frame(uplink.audio_data, is_vpu=uplink.is_vpu, vpu_energy=uplink.vpu_energy)
 
         # Barge-in interruption check:
         # If user starts speaking while agent is playing audio, execute instant 2ms half-cosine fadeout!

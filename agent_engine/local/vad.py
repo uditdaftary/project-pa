@@ -33,6 +33,7 @@ class VoiceActivityDetector:
         high_pass_cutoff_hz: float = 80.0,
         high_pass_r: float = 0.968,
         vpu_whisper_threshold: float = 0.35,
+        fixed_threshold_dbfs: Optional[float] = None,
     ):
         self.sample_rate = sample_rate
         self.frame_duration_ms = frame_duration_ms
@@ -52,7 +53,9 @@ class VoiceActivityDetector:
 
         # Baseline fixed threshold converted to dBFS if specified
         self._fixed_threshold_dbfs: Optional[float] = None
-        if energy_threshold is not None:
+        if fixed_threshold_dbfs is not None:
+            self._fixed_threshold_dbfs = float(fixed_threshold_dbfs)
+        elif energy_threshold is not None:
             eth = float(energy_threshold)
             if eth > 1.0:
                 self._fixed_threshold_dbfs = float(20.0 * np.log10(eth / 32768.0))
@@ -71,6 +74,8 @@ class VoiceActivityDetector:
         # Adaptive state
         self.noise_floor_dbfs = float(initial_noise_floor_dbfs)
         self.threshold_dbfs = self.noise_floor_dbfs + self.snr_margin_db
+        if self._fixed_threshold_dbfs is not None:
+            self.threshold_dbfs = max(self.threshold_dbfs, self._fixed_threshold_dbfs)
         self.is_speech = False
         self.is_turn_complete = False
         self.hangover_count = 0
@@ -94,10 +99,14 @@ class VoiceActivityDetector:
     def set_playback_active(self, active: bool, reference_signal: Optional[np.ndarray] = None) -> None:
         """Set acoustic echo suppression state to prevent self-triggering."""
         self._is_playback_active = bool(active)
-        if active and reference_signal is not None and len(reference_signal) > 0:
-            ref_dbfs = self.compute_dbfs(reference_signal)
-            leakage_est = ref_dbfs - 12.0
-            self._reference_ducking_threshold = leakage_est + self.ducking_attenuation_db
+        if active and reference_signal is not None:
+            clean_ref = self._sanitize_audio(reference_signal)
+            if len(clean_ref) > 0:
+                ref_dbfs = self.compute_dbfs(clean_ref)
+                leakage_est = ref_dbfs - 12.0
+                self._reference_ducking_threshold = leakage_est + self.ducking_attenuation_db
+            else:
+                self._reference_ducking_threshold = None
         else:
             self._reference_ducking_threshold = None
 
@@ -108,6 +117,8 @@ class VoiceActivityDetector:
         self._prev_y = 0.0
         self.noise_floor_dbfs = float(self.initial_noise_floor_dbfs)
         self.threshold_dbfs = self.noise_floor_dbfs + self.snr_margin_db
+        if self._fixed_threshold_dbfs is not None:
+            self.threshold_dbfs = max(self.threshold_dbfs, self._fixed_threshold_dbfs)
         self.is_speech = False
         self.is_turn_complete = False
         self.hangover_count = 0
@@ -265,6 +276,8 @@ class VoiceActivityDetector:
             self.noise_floor_dbfs = (1.0 - alpha) * self.noise_floor_dbfs + alpha * frame_dbfs
             self.noise_floor_dbfs = float(np.clip(self.noise_floor_dbfs, self.min_noise_floor_dbfs, self.max_noise_floor_dbfs))
             self.threshold_dbfs = self.noise_floor_dbfs + self.snr_margin_db
+            if self._fixed_threshold_dbfs is not None:
+                self.threshold_dbfs = max(self.threshold_dbfs, self._fixed_threshold_dbfs)
 
         # Onset persistence
         if raw_speech:
