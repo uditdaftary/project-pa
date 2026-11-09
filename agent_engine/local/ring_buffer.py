@@ -203,12 +203,16 @@ class AudioRingBuffer:
             return 0
 
         def _assign_out(start: int, end: int, data: np.ndarray) -> None:
-            if outdata.ndim == 1:
-                outdata[start:end] = data
-            elif outdata.ndim == 2:
-                outdata[start:end, :] = data[:, None]
+            if np.issubdtype(outdata.dtype, np.floating):
+                scaled = data.astype(outdata.dtype) * (1.0 / 32768.0)
             else:
-                outdata[start:end] = data.reshape(end - start, *outdata.shape[1:])
+                scaled = data
+            if outdata.ndim == 1:
+                outdata[start:end] = scaled
+            elif outdata.ndim == 2:
+                outdata[start:end, :] = scaled[:, None]
+            else:
+                outdata[start:end] = scaled.reshape(end - start, *outdata.shape[1:])
 
         def _zero_out(start: int, end: int) -> None:
             if outdata.ndim == 1:

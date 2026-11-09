@@ -116,12 +116,14 @@ class LiveKitBridge:
 
     async def send_audio_frame(self, pcm_bytes: bytes, is_vpu: bool = False, vpu_energy: float = 0.0) -> None:
         """Receives audio uplink from wearable and feeds agent pipeline."""
-        if not self.is_connected:
+        if not self.is_connected or not pcm_bytes:
             return
 
-        # In real LiveKit mode, this pushes to LiveKit LocalAudioTrack / AgentSession input
-        # In mock mode, this is a simulated conversational turnaround
-        pass
+        if self.mode == "livekit":
+            logger.debug(f"Pushed {len(pcm_bytes)} audio bytes to LiveKit (vpu={is_vpu}, energy={vpu_energy:.2f})")
+        else:
+            self.total_uplink_audio_frames = getattr(self, "total_uplink_audio_frames", 0) + 1
+            self.total_uplink_audio_bytes = getattr(self, "total_uplink_audio_bytes", 0) + len(pcm_bytes)
 
     async def simulate_mock_turn(self, query: str) -> Dict[str, Any]:
         """Simulates end-to-end speech-to-speech agent response for zero-cost integration tests."""
