@@ -94,5 +94,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
     - Added `MSG_HEARTBEAT` echo pong handler in `ambient.js`, dynamically computing round-trip latency and updating `#latencyMetric`.
     - Reset Web Audio timeline cursor `nextStartTime` upon switching to standby in `ambient.js` to eliminate packet jitter drift.
   - **Test Suite Expansion**: Added 8 new automated unit and integration tests covering bytearray/memoryview encoding, whitespace JSON decoding, odd-length downlink audio, autonomous playback clock VAD reset, external drain reset, ClientConnection backpressure timeouts, and lifespan teardown (72 passing tests in 2.40s).
+- **Gateway CLI Entrypoint & Clean Module Import (73 Passing Tests)**:
+  - Added `if __name__ == "__main__":` entrypoint to [`gateway/server.py`](file:///c:/Projects/PA/gateway/server.py) invoking `uvicorn.run(...)` on configurable `PA_GATEWAY_HOST` and `PA_GATEWAY_PORT`.
+  - Removed premature `from gateway.server import ...` from [`gateway/__init__.py`](file:///c:/Projects/PA/gateway/__init__.py), eliminating `<frozen runpy>:128: RuntimeWarning: 'gateway.server' found in sys.modules` and preventing auto-exit on startup.
+  - Added `@app.get("/")` root redirect to `/simulator/` and regression test `test_root_redirect` in [`tests/test_gateway.py`](file:///c:/Projects/PA/tests/test_gateway.py).
+
 
 

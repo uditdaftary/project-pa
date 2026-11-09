@@ -208,3 +208,10 @@ def test_lifespan_graceful_shutdown(client):
     assert not engine._playback_task.done()
 
 
+def test_root_redirect(client):
+    """Verify GET / redirects to /simulator/."""
+    response = client.get("/", follow_redirects=False)
+    assert response.status_code in (301, 302, 307, 308)
+    assert response.headers["location"] == "/simulator/"
+
+

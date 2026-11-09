@@ -14,6 +14,7 @@ import time
 from contextlib import asynccontextmanager
 from typing import Optional
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
+from fastapi.responses import RedirectResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -77,6 +78,12 @@ os.makedirs(AMBIENT_DIR, exist_ok=True)
 
 app.mount("/simulator", StaticFiles(directory=SIMULATOR_DIR, html=True), name="simulator")
 app.mount("/ambient", StaticFiles(directory=AMBIENT_DIR, html=True), name="ambient")
+
+
+@app.get("/")
+def get_root():
+    """Redirect root access to the Wearable Eyebox Simulator."""
+    return RedirectResponse(url="/simulator/")
 
 
 # --- REST Endpoints ---
@@ -214,3 +221,15 @@ async def websocket_ambient_endpoint(websocket: WebSocket):
         pass
     finally:
         audio_router.unregister_ambient(websocket)
+
+
+if __name__ == "__main__":
+    import uvicorn
+
+    host = os.environ.get("PA_GATEWAY_HOST", "127.0.0.1")
+    port = int(os.environ.get("PA_GATEWAY_PORT", "8000"))
+    print(f"Starting Project PA Gateway on http://{host}:{port}")
+    print(f"  - Wearable HUD Simulator:  http://{host}:{port}/simulator/")
+    print(f"  - Ambient Screen Receiver: http://{host}:{port}/ambient/")
+    uvicorn.run("gateway.server:app", host=host, port=port, reload=False)
+
