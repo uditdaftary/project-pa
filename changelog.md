@@ -45,3 +45,36 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   - **Ambient Markdown Table Formatter Fixed (`ambient_screen/ambient.js`)**: Resolved duplicated raw table pipe markdown and generated balanced `<table><thead>...</thead><tbody>...</tbody></table>` DOM elements.
   - **Buffer Bounds Safety**: Added safety checks in `simulator.js` and `ambient.js` against truncated frame buffer allocations.
   - **Test Suite Expansion**: Added 9 new unit tests verifying 2D buffer playback, read-only arrays, non-clobbering routing, voice query intent, and Node.js-to-Python cross-language binary TLV CRC-16 CCITT compatibility (52 total passing tests in 1.21s).
+- **Master Fix Execution across 4 Streams — 27 Bugs Resolved (64 Passing Tests)**:
+  - **Stream 1: Protocol (`core/protocol.py`, `core/messages.py`)**:
+    - **BUG-007 (Codec Preservation)**: Standardized on 10-byte binary header `>HBBBBf` encoding `codec_id` (`0=pcm_s16le`, `1=opus`, `2=lc3`) with explicit 22-byte 2-byte alignment for WebAudio `Int16Array` compatibility.
+    - **BUG-008 (Strict CRC-16 Validation)**: Removed `and crc != 0` check in `unpack_tlv` and `TLVStreamParser.feed`, preventing corrupted packets with zero checksums from bypassing validation.
+    - **BUG-009 (JSON Struct Unpack Collision)**: Added `payload_bytes.startswith(b"{")` guard in `decode_message()` to parse JSON audio and bitmap payloads safely before binary struct unpacking.
+    - **BUG-017 (HUD Text Coordinate Default)**: Set default `y = 20` in `HudDrawTextPayload` and `ctx.textBaseline = "top"` in `simulator.js` to ensure text renders within visible eyebox bounds.
+    - **BUG-022 (Raw Bytes Header Alignment)**: Automatically prepended the standard 10-byte binary header when packaging raw bytes in `encode_message()` to prevent sample stripping during decoding.
+  - **Stream 2: Audio & VAD (`agent_engine/local/ring_buffer.py`, `agent_engine/local/vad.py`, `agent_engine/engine.py`, `agent_engine/cloud/livekit_bridge.py`)**:
+    - **BUG-002 (Server Ring Buffer Playback Clock)**: Implemented autonomous 20ms `_playback_clock_task()` in `HybridAgentEngine` ticking `self.ring_buffer.read(samples_per_tick)` and clearing VAD playback active status when audio finishes.
+    - **BUG-004 (Float DAC Normalization)**: Scaled samples by `1.0 / 32768.0` in `AudioRingBuffer._assign_out` when `np.issubdtype(outdata.dtype, np.floating)` for both main buffer and `fadeout_tail`, eliminating +84 dB digital overdrive.
+    - **BUG-006 (Acoustic Echo Suppression Enablement)**: Sanitized reference signal in `VoiceActivityDetector.set_playback_active()` and passed reference samples when dispatching downlink audio to prevent self-interruption.
+    - **BUG-015 (Sentence Accumulator Turn Flush)**: Removed premature `flush()` call after token feeding; sentence accumulator flushes completed sentences dynamically and flushes remaining fragments only on turn completion.
+    - **BUG-020 (VAD Clamping Against Fixed Threshold)**: Enforced `threshold_dbfs = max(noise + snr, _fixed_threshold_dbfs)` across `__init__`, `reset()`, and `_evaluate_frame()` to prevent false triggers in ultra-quiet rooms.
+    - **BUG-027 (LiveKit Bridge Audio Uplink)**: Implemented `send_audio_frame()` in `LiveKitBridge` and wired `await self.bridge.send_audio_frame()` into `process_audio_uplink`.
+  - **Stream 3: Gateway & Router (`gateway/audio_router.py`, `gateway/server.py`, `agent_engine/router.py`)**:
+    - **BUG-003 (Ambient Streaming Routing Condition)**: Fixed inverted routing condition in `engine.py` to route streaming text to ambient display when `recommended == CAST_AMBIENT or current == CAST_AMBIENT`.
+    - **BUG-005 (Routing Origin Distinction)**: Added `RoutingOrigin.GAZE` and `RoutingOrigin.EXPLICIT_TOOL` in `CrossSurfaceRouter`; only gaze-initiated casts revert automatically to `PRIVATE_HUD` when looking away.
+    - **BUG-013 & BUG-016 (Concurrent WebSocket Queue & Safe Unregistering)**: Implemented `ClientConnection` with outbound `asyncio.Queue` and background drain task per WebSocket. Selectively drops only `MSG_AUDIO_DOWNLINK` on queue overflow. Wrapped endpoints in `try / finally` calling unregister methods with explicit closure.
+    - **BUG-014 (Async REST Override Route)**: Converted `override_route()` endpoint in `gateway/server.py` to `async def` to avoid cross-thread event loop instantiation.
+    - **BUG-018 (Gateway Telemetry & Latency Metrics)**: Added `record_audio_uplink` and `record_heartbeat` in `GatewayAudioRouter`, computing accurate roundtrip latency and tracking active uplink timestamps.
+    - **BUG-019 (Strict CORS Regex)**: Replaced insecure wildcard CORS with `allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$"`.
+    - **BUG-025 (Background Task Exception Logging)**: Added task done callback logging uncaught exceptions with full traceback in `_safe_dispatch()`.
+  - **Stream 4: UI & Simulator (`simulator/simulator.js`, `ambient_screen/ambient.js`, `ambient_screen/index.html`, `ambient_screen/styles.css`)**:
+    - **BUG-001 (Ambient HTML Sanitization)**: Added `escapeHtml()` in `ambient.js` and sanitized all dynamic markdown and card titles against stored XSS.
+    - **BUG-010 (Simulator Mic Loopback Muting)**: Routed microphone processor node through a muted `GainNode(0.0)` connected to `destination` to prevent speaker feedback screeching.
+    - **BUG-011 (Web Audio Downlink Timeline Cursor)**: Implemented `nextStartTime` timeline scheduling in both `simulator.js` and `ambient.js` with playback cursor reset on barge-in.
+    - **BUG-012 (16kHz AudioContext Initialization)**: Explicitly configured `AudioContext({ sampleRate: 16000 })` in `simulator.js`.
+    - **BUG-021 (Ambient Visualizer Divide-by-Zero Guard)**: Guarded spectrum bar step calculation with `Math.max(1, Math.floor(len / 40))` and cancelled previous spectrum timers.
+    - **BUG-023 (Glance Away Yaw Angle)**: Adjusted "Glance Away" yaw angle in `simulator.js` to 65° (`cos(65°) = 0.4226 < 0.50`) to clear the deadband threshold.
+    - **BUG-024 (Client Keepalive Heartbeat Interval)**: Added 15-second keepalive `MSG_HEARTBEAT` timer in both `simulator.js` and `ambient.js`.
+    - **BUG-026 (Ambient Multi-Card Dashboard Tile Rendering)**: Added `#cardsGrid` dashboard container and rendered structured card tiles in `ambient.js` with responsive styling in `styles.css`.
+  - **Test Suite Expansion**: Added 12 new comprehensive tests covering floating DAC scaling, fixed VAD threshold clamping, gaze vs explicit cast preservation, streaming accumulator turn flushing, raw byte 10-byte header packing, codec preservation, zero CRC packet enforcement, JSON struct collision prevention, and HUD text coordinate defaults (64 total passing tests).
+
