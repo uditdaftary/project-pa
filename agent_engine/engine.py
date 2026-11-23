@@ -11,7 +11,7 @@ Integrates:
 from __future__ import annotations
 import asyncio
 import logging
-from typing import Callable, List, Optional
+from typing import Any, Callable, List, Optional
 import numpy as np
 
 from core.messages import (
