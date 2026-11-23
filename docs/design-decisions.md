@@ -82,21 +82,6 @@ Project PA creates a personalized, physical-first interface between a user and t
   - `tests/`: Comprehensive unit tests for protocol serialization, audio routing, and latency benchmarks.
 - **Rationale:** Minimizes multi-repo dependency drift, enables single-command startup, and guarantees protocol synchronization.
 
-### ADR-009: Post-Sprint Multi-Team Adversarial Review & Competitive Resolution Protocol
-- **Trigger:** Initiates automatically upon completion of the initial software development sprint.
-- **Phase 1: Deep Scrutiny (Reviewer Team - max 4 subagents)**:
-  - Guided by `/code-review-and-quality` (5-axis audit: Correctness, Readability, Architecture, Security, Performance) and `/bugs-are-annoying` (adversarial bug hunter across 14 bug taxonomies).
-  - Outputs formal `bugs.md` with exact `file:line` references, triggers, impacts, and severity tiers (🔴 Critical, 🟡 Intermediate, 🟢 Normal).
-- **Phase 2: Competitive Solution Synthesis (2 Independent Teams of 2 Subagents)**:
-  - **Team Alpha** (2 agents) and **Team Beta** (2 agents) independently analyze the review findings.
-  - Agents within each team debate and synthesize a united, cohesive architectural resolution strategy.
-- **Phase 3: Orchestrator Evaluation & Selection**:
-  - The Sole Orchestrator compares Team Alpha vs. Team Beta proposals, selects the superior technical fixes based on correctness, minimal blast radius, and performance, and formulates the Master Fix Plan.
-- **Phase 4: Multi-Agent Fix Deployment & Verification**:
-  - Deploy a specialized 4-agent fix team to apply the selected solutions, verify zero regressions via test suites, and update `bugs.md` with ✅ Resolved status.
-- **Phase 5: GitHub Tracking**:
-  - Post all identified issues and review comments directly to GitHub issues and pull requests via `gh` CLI.
-
 ---
 
 ## 3. Hardware Roadmap & Strategy

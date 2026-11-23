@@ -79,7 +79,7 @@ gateway/          FastAPI server and WebSocket fan-out
 simulator/        Wearable simulator (HTML, CSS, JS)
 ambient_screen/   Ambient screen receiver (HTML, CSS, JS)
 tests/            pytest suite
-docs/             Design decisions, bug report, development notes
+docs/             Design decisions, bug report
 ```
 
 ## Configuration

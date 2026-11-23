@@ -16,7 +16,7 @@
 - **Trigger:** Agent or external participant sending a markdown payload containing malicious HTML tags or script attributes.
 - **Impact:** Arbitrary JavaScript execution in the ambient screen browser context, with access to WebSockets and local storage.
 - **Suggested Fix:** Sanitize input by HTML-encoding `<` and `>` before applying markdown regexes, or use `DOMPurify.sanitize()`.
-- **Status:** ✅ Resolved (FixAgent-UI, 2026-11-09)
+- **Status:** ✅ Resolved (2026-11-09)
 - **Resolution:** Added `escapeHtml()` in `ambient_screen/ambient.js` and sanitized all dynamic markdown and card titles before regex formatting.
 
 ### BUG-002: Audio Ring Buffer Server Leak & Permanent False Barge-In Deadlock
@@ -25,7 +25,7 @@
 - **Trigger:** Any agent voice downlink playback.
 - **Impact:** Once the agent speaks once, `is_actively_playing()` is permanently locked to `True`, causing any subsequent ambient audio or microphone noise to trigger an immediate barge-in drain. Furthermore, `playhead_seconds` is stuck at `0.0s`.
 - **Suggested Fix:** Drain the server-side ring buffer with an asynchronous real-time consumer task, or drive playback state based on client playback ACK packets over WebSocket.
-- **Status:** ✅ Resolved (FixAgent-Audio, 2026-11-09)
+- **Status:** ✅ Resolved (2026-11-09)
 - **Resolution:** Implemented autonomous 20ms `_playback_clock_task()` in `HybridAgentEngine` ticking `self.ring_buffer.read(samples_per_tick)` and resetting VAD playback active status upon completion.
 
 ### BUG-003: Inverted Routing Condition Diverting Ambient Streaming Text to HUD
@@ -36,7 +36,7 @@
 - **Trigger:** Streaming agent text when the display is in `CAST_AMBIENT` mode.
 - **Impact:** All streaming text in ambient mode is diverted to the 640×200 MicroLED HUD instead of the ambient screen, repeatedly clearing the wearable display.
 - **Suggested Fix:** Change condition to `if recommended_surface == DisplaySurface.CAST_AMBIENT or self.router.current_display == DisplaySurface.CAST_AMBIENT:`.
-- **Status:** ✅ Resolved (FixAgent-Gateway, 2026-11-09)
+- **Status:** ✅ Resolved (2026-11-09)
 - **Resolution:** Fixed routing condition to check `recommended_surface == DisplaySurface.CAST_AMBIENT or self.router.current_display == DisplaySurface.CAST_AMBIENT`.
 
 ### BUG-004: Float DAC Clipping (+84 dB Overdrive) in `AudioRingBuffer.read_into`
@@ -45,7 +45,7 @@
 - **Trigger:** Audio output callbacks using standard floating-point audio buffers (e.g., PyAudio / SoundDevice / WebAudio).
 - **Impact:** Severe acoustic distortion, extreme clipping (+84 dB digital overdrive), and potential speaker damage.
 - **Suggested Fix:** Divide integer samples by `32768.0` whenever `np.issubdtype(outdata.dtype, np.floating)`.
-- **Status:** ✅ Resolved (FixAgent-Audio, 2026-11-09)
+- **Status:** ✅ Resolved (2026-11-09)
 - **Resolution:** Scaled samples by `1.0 / 32768.0` in `_assign_out` when `np.issubdtype(outdata.dtype, np.floating)` for both ring buffer data and `fadeout_tail`.
 
 ### BUG-005: Unconditional IMU Gaze-Away Destroys Intentional Ambient Casts
@@ -54,7 +54,7 @@
 - **Trigger:** Looking away from the screen after an explicit command or tool call to cast.
 - **Impact:** Looking away from the TV immediately destroys the cast session, even when the user deliberately wants a dashboard left on the TV while looking elsewhere.
 - **Suggested Fix:** Maintain a `cast_origin: str` ("gaze" vs "explicit_tool"). Only revert automatically if the cast origin was "gaze".
-- **Status:** ✅ Resolved (FixAgent-Gateway, 2026-11-09)
+- **Status:** ✅ Resolved (2026-11-09)
 - **Resolution:** Introduced `RoutingOrigin` enum (`GAZE` vs `EXPLICIT_TOOL`) in `agent_engine/router.py`. Only gaze-initiated casts auto-revert upon looking away.
 
 ### BUG-006: Inoperative Acoustic Echo Suppression (AES) Causing Self-Interruption
@@ -63,7 +63,7 @@
 - **Trigger:** Any agent voice playback while the microphone is active.
 - **Impact:** Acoustic Echo Suppression is completely disabled. Downlink audio playing through speakers leaks into the microphone and triggers false speech detection, immediately cutting off the agent's own voice.
 - **Suggested Fix:** Call `self.vad.set_playback_active(True)` when downlink audio is dispatched to the wearable or room speaker.
-- **Status:** ✅ Resolved (FixAgent-Audio, 2026-11-09)
+- **Status:** ✅ Resolved (2026-11-09)
 - **Resolution:** Invoked `self.vad.set_playback_active(True, reference_signal=ref_samples)` upon receiving downlink audio, and sanitized `reference_signal` via `_sanitize_audio`.
 
 ### BUG-022: Raw Byte Payloads in `encode_message` Silently Stripped by `decode_message`
@@ -72,7 +72,7 @@
 - **Trigger:** Transmitting raw audio PCM bytes over TLV without wrapping in an `AudioUplinkPayload` instance.
 - **Impact:** Permanent loss of the first 8 bytes (4 audio samples) of every frame, and corruption of sample rate, channel count, and VPU metadata.
 - **Suggested Fix:** Always prepend the 8-byte binary header when packing raw bytes in `encode_message`, or use a distinct message flag / header structure.
-- **Status:** ✅ Resolved (FixAgent-Protocol, 2026-11-09)
+- **Status:** ✅ Resolved (2026-11-09)
 - **Resolution:** Prepend standard 10-byte binary header in `encode_message()` when packaging raw bytes for audio uplink and downlink.
 
 ### BUG-027: LiveKit Bridge Audio Uplink is a Dead Stub
@@ -87,7 +87,7 @@
 - **Trigger:** Running in `livekit_mode="livekit"` with active LiveKit cloud credentials.
 - **Impact:** Uplink audio is silently dropped and never forwarded to LiveKit Agents 1.x or speech models.
 - **Suggested Fix:** Implement audio publishing using `LocalAudioTrack` / `rtc.AudioFrame` or LiveKit data channels.
-- **Status:** ✅ Resolved (FixAgent-Audio, 2026-11-09)
+- **Status:** ✅ Resolved (2026-11-09)
 - **Resolution:** Implemented `send_audio_frame()` in `LiveKitBridge` and wired `await self.bridge.send_audio_frame()` into `HybridAgentEngine.process_audio_uplink`.
 
 ---
@@ -100,7 +100,7 @@
 - **Trigger:** Transmitting Opus or LC3 encoded audio packets.
 - **Impact:** Breaks transparent audio pass-through for Opus-over-GATT (ADR-003, ADR-007).
 - **Suggested Fix:** Add a 1-byte codec enum to the binary header (e.g. `0=pcm_s16le`, `1=opus`, `2=lc3`).
-- **Status:** ✅ Resolved (FixAgent-Protocol, 2026-11-09)
+- **Status:** ✅ Resolved (2026-11-09)
 - **Resolution:** Standardized on 10-byte binary header `>HBBBBf` encoding `codec_id` (`0=pcm_s16le`, `1=opus`, `2=lc3`), ensuring 22-byte 2-byte aligned WebAudio offset.
 
 ### BUG-008: CRC-16 Checksum Validation Bypassed for Zero Checksums
@@ -109,7 +109,7 @@
 - **Trigger:** Any corrupted packet with CRC bytes equal to `0x0000`.
 - **Impact:** Corrupted frames bypass validation.
 - **Suggested Fix:** Remove `and crc != 0` check.
-- **Status:** ✅ Resolved (FixAgent-Protocol, 2026-11-09)
+- **Status:** ✅ Resolved (2026-11-09)
 - **Resolution:** Removed `and crc != 0` check from `unpack_tlv()` and `TLVStreamParser.feed()`.
 
 ### BUG-009: Binary Struct Unpack Collision on JSON Audio and Bitmap Payloads
@@ -118,7 +118,7 @@
 - **Trigger:** Sending JSON-serialized audio or bitmap messages.
 - **Impact:** Incorrect decoding and unexpected field values.
 - **Suggested Fix:** Check the packet flags or check if payload begins with `{` before binary struct unpacking.
-- **Status:** ✅ Resolved (FixAgent-Protocol, 2026-11-09)
+- **Status:** ✅ Resolved (2026-11-09)
 - **Resolution:** Added `payload_bytes.startswith(b"{")` check in `decode_message()` to parse JSON payloads safely before binary struct unpacking.
 
 ### BUG-010: Eyewear Simulator Direct Mic Output Feedback Loop
@@ -127,7 +127,7 @@
 - **Trigger:** Clicking "Enable Mic Input" in the simulator.
 - **Impact:** Immediate acoustic feedback screech and echo.
 - **Suggested Fix:** Remove `micProcessor.connect(audioCtx.destination)`. The processor only needs to stream samples over WebSocket, not play locally.
-- **Status:** ✅ Resolved (FixAgent-UI, 2026-11-09)
+- **Status:** ✅ Resolved (2026-11-09)
 - **Resolution:** Connected `micProcessor` through a muted `GainNode(0.0)` connected to `destination` to allow Web Audio processing without acoustic feedback.
 
 ### BUG-011: Web Audio Downlink Playback Lacks Timeline Scheduling
@@ -136,7 +136,7 @@
 - **Trigger:** Streaming continuous audio chunks over WebSocket.
 - **Impact:** Choppy playback and acoustic artifacts.
 - **Suggested Fix:** Maintain a `nextStartTime` cursor: `nextStartTime = Math.max(audioCtx.currentTime, nextStartTime); source.start(nextStartTime); nextStartTime += buffer.duration;`.
-- **Status:** ✅ Resolved (FixAgent-UI, 2026-11-09)
+- **Status:** ✅ Resolved (2026-11-09)
 - **Resolution:** Implemented `nextStartTime` timeline scheduling in both `simulator.js` and `ambient.js`, and added playback reset on barge-in.
 
 ### BUG-012: Simulator Microphone Sends 48kHz Audio Labeled as 16kHz
@@ -145,7 +145,7 @@
 - **Trigger:** Using live microphone input in the simulator.
 - **Impact:** Audio playback is pitched down 3x and plays in slow motion.
 - **Suggested Fix:** Initialize `new AudioContext({ sampleRate: 16000 })` or resample in the script processor.
-- **Status:** ✅ Resolved (FixAgent-UI, 2026-11-09)
+- **Status:** ✅ Resolved (2026-11-09)
 - **Resolution:** Explicitly initialized `AudioContext({ sampleRate: 16000 })` in `simulator.js`.
 
 ### BUG-013: Unsynchronized Concurrent `ws.send_bytes()` on Starlette WebSockets
@@ -154,7 +154,7 @@
 - **Trigger:** High-frequency audio packets sent simultaneously with telemetry or display updates.
 - **Impact:** Starlette / Uvicorn raises `RuntimeError: Cannot call "send" concurrently for a single connection`.
 - **Suggested Fix:** Wrap client connections in an `asyncio.Lock()` or use an outbound message queue.
-- **Status:** ✅ Resolved (FixAgent-Gateway, 2026-11-09)
+- **Status:** ✅ Resolved (2026-11-09)
 - **Resolution:** Implemented `ClientConnection` with a dedicated `asyncio.Queue` and single-task drain loop per WebSocket, selectively dropping only audio frames under backpressure.
 
 ### BUG-014: Cross-Thread Event Loop Instantiation in Synchronous REST Endpoint
@@ -163,7 +163,7 @@
 - **Trigger:** Calling `POST /route`.
 - **Impact:** Event loop conflicts and potential thread crashes.
 - **Suggested Fix:** Change `override_route()` to `async def` and dispatch on the running ASGI loop.
-- **Status:** ✅ Resolved (FixAgent-Gateway, 2026-11-09)
+- **Status:** ✅ Resolved (2026-11-09)
 - **Resolution:** Declared `override_route()` as `async def` in `gateway/server.py`.
 
 ### BUG-023: Simulator "Glance Away" Button Fails Due to Deadband Zone
@@ -172,7 +172,7 @@
 - **Trigger:** Clicking "Glanced away from screen" in the simulator.
 - **Impact:** The button does nothing; the screen remains in `CAST_AMBIENT` mode.
 - **Suggested Fix:** Set `yaw = 65°` in `glanceAwayBtn` (`cos(65°) = 0.4226 < 0.50`), or adjust deadband thresholds.
-- **Status:** ✅ Resolved (FixAgent-UI, 2026-11-09)
+- **Status:** ✅ Resolved (2026-11-09)
 - **Resolution:** Updated `glanceAwayBtn` yaw to 65° in `simulator.js` (`cos(65°) = 0.4226 < 0.50`).
 
 ### BUG-025: Unhandled Background Task Exceptions in `_safe_dispatch`
@@ -181,7 +181,7 @@
 - **Trigger:** Any exception raised inside listener callbacks (e.g. disconnected socket).
 - **Impact:** Silent failures and unhandled coroutine warnings.
 - **Suggested Fix:** Add `task.add_done_callback(_log_task_exception)`.
-- **Status:** ✅ Resolved (FixAgent-Gateway, 2026-11-09)
+- **Status:** ✅ Resolved (2026-11-09)
 - **Resolution:** Added `task.add_done_callback(_log_exc)` logging uncaught exceptions with full traceback.
 
 ### BUG-019: Insecure CORS Wildcard Combined With `allow_credentials=True`
@@ -190,7 +190,7 @@
 - **Trigger:** Browser security evaluation.
 - **Impact:** Violates W3C CORS specifications and fails in strict browser environments.
 - **Suggested Fix:** Remove `allow_credentials=True` or specify explicit local origin list.
-- **Status:** ✅ Resolved (FixAgent-Gateway, 2026-11-09)
+- **Status:** ✅ Resolved (2026-11-09)
 - **Resolution:** Replaced wildcard origin with `allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$"`.
 
 ---
@@ -203,7 +203,7 @@
 - **Trigger:** Streaming token generation.
 - **Impact:** Defeats the purpose of the sentence accumulator.
 - **Suggested Fix:** Fix `StreamingSentenceAccumulator.feed()` to properly emit complete sentences and only call `flush()` on turn completion.
-- **Status:** ✅ Resolved (FixAgent-Audio, 2026-11-09)
+- **Status:** ✅ Resolved (2026-11-09)
 - **Resolution:** Removed premature `flush()` from token feeding loop; accumulator flushes only upon turn completion.
 
 ### BUG-016: Disconnected WebSockets Discarded Without Explicit Closure
@@ -212,7 +212,7 @@
 - **Trigger:** Client network disconnection.
 - **Impact:** Leaves socket resources dangling until GC.
 - **Suggested Fix:** Ensure `await ws.close()` is called in a try/finally block.
-- **Status:** ✅ Resolved (FixAgent-Gateway, 2026-11-09)
+- **Status:** ✅ Resolved (2026-11-09)
 - **Resolution:** Wrapped WebSocket endpoints in `try / finally` calling `unregister_wearable` / `unregister_ambient`, which explicitly closes sockets.
 
 ### BUG-017: Default `y = 0` in `HudDrawTextPayload` Renders Text Off-Screen
@@ -221,7 +221,7 @@
 - **Trigger:** Using default `y` in `HudDrawTextPayload`.
 - **Impact:** Text is invisible on the HUD.
 - **Suggested Fix:** Default `y = 20` or set canvas `textBaseline = "top"`.
-- **Status:** ✅ Resolved (FixAgent-Protocol, 2026-11-09)
+- **Status:** ✅ Resolved (2026-11-09)
 - **Resolution:** Changed default `y = 20` in `HudDrawTextPayload` and set `ctx.textBaseline = "top"` in `simulator.js`.
 
 ### BUG-018: Gateway Telemetry Latency and Uplink Variables Never Updated
@@ -230,7 +230,7 @@
 - **Trigger:** Reading telemetry.
 - **Impact:** Telemetry reports static initial values.
 - **Suggested Fix:** Update timestamps upon receiving `MSG_AUDIO_UPLINK` and calculate roundtrip latency.
-- **Status:** ✅ Resolved (FixAgent-Gateway, 2026-11-09)
+- **Status:** ✅ Resolved (2026-11-09)
 - **Resolution:** Implemented `record_audio_uplink` and `record_heartbeat` in `GatewayAudioRouter`, tracking timestamps and roundtrip latency.
 
 ### BUG-020: VAD Noise Floor Reset and Speech Evaluation Drop Fixed Threshold
@@ -239,7 +239,7 @@
 - **Trigger:** Extremely quiet environments.
 - **Impact:** Threshold can drop too low, causing false positive speech triggers.
 - **Suggested Fix:** Ensure `threshold_dbfs = max(noise_floor_dbfs + snr_margin_db, _fixed_threshold_dbfs)`.
-- **Status:** ✅ Resolved (FixAgent-Audio, 2026-11-09)
+- **Status:** ✅ Resolved (2026-11-09)
 - **Resolution:** Clamped `threshold_dbfs` against `_fixed_threshold_dbfs` across `__init__`, `reset()`, and `_evaluate_frame()`.
 
 ### BUG-021: Ambient Visualizer Division by Zero for Chunks Under 40 Samples
@@ -248,7 +248,7 @@
 - **Trigger:** Small audio chunks.
 - **Impact:** Visualizer glitches and flickering.
 - **Suggested Fix:** Ensure `step = Math.max(1, Math.floor(len / 40))` and cancel pending timers.
-- **Status:** ✅ Resolved (FixAgent-UI, 2026-11-09)
+- **Status:** ✅ Resolved (2026-11-09)
 - **Resolution:** Guarded step calculation with `Math.max(1, Math.floor(len / 40))` and cancelled previous spectrum timeout timers.
 
 ### BUG-024: Complete Absence of Client-Side Heartbeat Keepalive Timers
@@ -257,7 +257,7 @@
 - **Trigger:** Idle connection.
 - **Impact:** Connections may be silently dropped by NAT or reverse proxies.
 - **Suggested Fix:** Add `setInterval(() => sendHeartbeat(), 15000)`.
-- **Status:** ✅ Resolved (FixAgent-UI, 2026-11-09)
+- **Status:** ✅ Resolved (2026-11-09)
 - **Resolution:** Added 15-second keepalive `MSG_HEARTBEAT` interval in both `simulator.js` and `ambient.js`.
 
 ### BUG-026: Ambient Receiver UI Completely Discards `cards` Metadata Array
@@ -266,7 +266,7 @@
 - **Trigger:** Sending multi-card dashboards.
 - **Impact:** Structured cards layout is lost.
 - **Suggested Fix:** Iterate over `data.cards` and render card elements in the ambient UI.
-- **Status:** ✅ Resolved (FixAgent-UI, 2026-11-09)
+- **Status:** ✅ Resolved (2026-11-09)
 - **Resolution:** Added `#cardsGrid` dashboard container and rendered structured card tiles in `ambient_screen/ambient.js`.
 
 ---

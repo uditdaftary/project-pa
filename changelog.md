@@ -12,7 +12,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - **Initial Repository Setup**: Initialized Git version control in `c:/Projects/PA`.
 - **Project Governance & Memory**:
   - `memory.md`: Core system thesis, architecture decision records (ADR-001 through ADR-004), hardware topology roadmap, and open-source foundation references.
-  - `agents.md`: Subagent registry defining roles, capabilities, and coordination protocols for orchestrator, software gateway, wearable OS, and research workers.
   - `changelog.md`: Continuous project journal.
 - **Deep Technical Investigation Report**: Synthesized comprehensive 4-domain investigation covering:
   - JBD 0.13" MicroLED + Mitsui MR-7 diffractive waveguide optical modeling (>1,000 nits eye luminance).
@@ -28,7 +27,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - **Hybrid Intelligence Architecture Selected (ADR-006)**: Adopted **Local-First Engine** directly adapting `C:\Projects\interactive-voice-agent` (Qwen 3.5 4B GGUF in 2.7GB VRAM, Moonshine Tiny CPU STT, PocketTTS CPU, sub-0.05ms atomic ring buffer) coupled with a **pluggable Cloud Realtime Bridge** (LiveKit Agents 1.x + Gemini Live / OpenAI Realtime) for sub-250ms native speech-to-speech and egocentric snapshot vision.
 - **Unified Framing Protocol Selected (ADR-007)**: Established **Type-Length-Value (TLV) Protocol** (`0x50 0x41` magic bytes) unifying WebSocket (Simulator / Wi-Fi) and BLE GATT/L2CAP (Nordic / ESP32 hardware) with standardized message types for audio, display buffers, VPU resonance, and IMU gestures.
 - **Repository Structure Adopted (ADR-008)**: Structured the workspace into `core/`, `agent_engine/`, `gateway/`, `simulator/`, `ambient_screen/`, and `tests/`.
-- **Adversarial Quality & Competitive Resolution Protocol Established (ADR-009)**: Formulated 5-stage post-development pipeline: 4-agent scrutiny audit (`code-review-and-quality` + `bugs-are-annoying` -> `bugs.md`), 2 competing teams of 2 subagents formulating unified resolution proposals, Orchestrator solution synthesis, 4-agent fix execution, and GitHub issue/PR sync.
 - **Implemented Full Software Stack Build Across 4 Core Streams**:
   - `core/`: Type-Length-Value (TLV) binary framing (`0x50 0x41` magic bytes, 12-byte header, CRC16 validation, streaming deserializer) and 10 typed message schemas in `core/protocol.py` and `core/messages.py`.
   - `agent_engine/`: Hybrid Agent Engine integrating `AudioRingBuffer` (sub-0.05ms atomic drain with 2ms half-cosine fadeout), `VoiceActivityDetector` (80Hz IIR high-pass, adaptive noise floor, ST LIS25BA VPU resonance fusion), `SentenceParser` (Unicode `\uE000` sentinel shielding), `CrossSurfaceRouter` (look-to-cast gaze alignment and asymmetric audio routing), and pluggable `LiveKitBridge`.
